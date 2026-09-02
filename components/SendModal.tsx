@@ -3,15 +3,7 @@
 import { useMemo, useState } from 'react'
 import { X, MessageCircle, Mail, Send, AlertTriangle } from 'lucide-react'
 import type { KybClient, Channel } from '@/lib/types'
-import { routeSegmentB, REQUIRED_MANUAL_FIELDS, type DocCategory } from '@/lib/kyb-templates'
-
-const MANUAL_FIELD_LABELS: Record<string, string> = {
-  holderName: 'Nombre del titular del documento',
-  attorneyName: 'Nombre del apoderado',
-  reason: 'Motivo del reset (ej. foto borrosa, documento vencido, VPN detectado)',
-  link: 'Link (verificación o formulario)',
-  detail: 'Detalle de lo solicitado',
-}
+import { routeSegmentB } from '@/lib/kyb-templates'
 
 interface SendModalProps {
   client: KybClient
@@ -23,7 +15,6 @@ export default function SendModal({ client, onClose, onSent }: SendModalProps) {
   const [channel, setChannel] = useState<Channel>('whatsapp')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [manualFields, setManualFields] = useState<Record<string, string>>({})
 
   const contactName = `${client.first_name ?? ''} ${client.last_name ?? ''}`.trim() || '—'
   const attemptNumber = (client.contacts_sent ?? 0) + 1
@@ -35,12 +26,7 @@ export default function SendModal({ client, onClose, onSent }: SendModalProps) {
     [client.segment, client.pending_docs_list],
   )
 
-  const category: DocCategory | 'generic' | null =
-    routing?.kind === 'specific' ? routing.category : routing?.kind === 'generic' ? 'generic' : null
-
-  const requiredFields = category && category !== 'generic' ? (REQUIRED_MANUAL_FIELDS[category] ?? []) : []
-  const missingFields = requiredFields.filter(f => !manualFields[f]?.trim())
-  const whatsappBlocked = channel === 'whatsapp' && (routing?.kind === 'needs_review' || missingFields.length > 0)
+  const whatsappBlocked = channel === 'whatsapp' && routing?.kind === 'needs_review'
 
   const handleSend = async () => {
     setLoading(true)
@@ -60,11 +46,6 @@ export default function SendModal({ client, onClose, onSent }: SendModalProps) {
           msg_language: client.msg_language,
           pending_docs_list: client.pending_docs_list,
           attempt_number: attemptNumber,
-          holder_name: manualFields.holderName,
-          attorney_name: manualFields.attorneyName,
-          reason: manualFields.reason,
-          link: manualFields.link,
-          detail: manualFields.detail,
         }),
       })
       if (!res.ok) {
@@ -161,25 +142,6 @@ export default function SendModal({ client, onClose, onSent }: SendModalProps) {
                 No pudimos determinar automáticamente qué plantilla enviar ({routing.reason}). Revisa el
                 documento pendiente antes de enviar por WhatsApp, o usa email.
               </span>
-            </div>
-          )}
-
-          {channel === 'whatsapp' && requiredFields.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-xs text-[#8b92a5]">Esta plantilla necesita datos que no vienen del CRM:</p>
-              {requiredFields.map(field => (
-                <div key={field}>
-                  <label className="block text-xs font-medium text-[#8b92a5] mb-1">
-                    {MANUAL_FIELD_LABELS[field] ?? field}
-                  </label>
-                  <input
-                    value={manualFields[field] ?? ''}
-                    onChange={e => setManualFields(f => ({ ...f, [field]: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[#1a1e28] border border-[#252836] rounded-lg text-sm text-white placeholder-[#8b92a5] focus:outline-none focus:border-[#6c63ff]/50"
-                    placeholder={MANUAL_FIELD_LABELS[field] ?? field}
-                  />
-                </div>
-              ))}
             </div>
           )}
 
