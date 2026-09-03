@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Save, RefreshCw, MessageCircle, Mail, Calendar, Hash, History, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Save, RefreshCw, MessageCircle, Mail, Calendar, Hash, History, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
+import { Skeleton } from '@/components/Skeleton'
 
 interface Settings {
   max_follow_ups: string
@@ -63,7 +64,25 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="p-8 text-[#8b92a5]">Loading settings…</div>
+      <div className="p-8 max-w-2xl">
+        <div className="mb-8">
+          <Skeleton className="h-7 w-28 mb-2" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <div className="space-y-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-[#13161e] border border-[#252836] rounded-2xl p-6">
+              <div className="flex items-center gap-3">
+                <Skeleton className="w-8 h-8 rounded-lg" />
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-64" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     )
   }
 
@@ -198,9 +217,17 @@ export default function SettingsPage() {
           </div>
 
           {runsLoading ? (
-            <p className="text-[#8b92a5] text-sm">Loading…</p>
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-9 w-full" />
+              ))}
+            </div>
           ) : runs.length === 0 ? (
-            <p className="text-[#8b92a5] text-sm">No runs recorded yet.</p>
+            <div className="flex flex-col items-center gap-2 py-6 text-center text-[#8b92a5]">
+              <Clock size={24} />
+              <p className="text-white font-medium text-sm">No runs recorded yet</p>
+              <p className="text-xs max-w-xs">Once the scheduled trigger fires /api/cron for the first time, its history shows up here.</p>
+            </div>
           ) : (
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {runs.map(run => (
