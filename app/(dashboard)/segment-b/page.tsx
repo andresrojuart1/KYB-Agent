@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { KybClient } from '@/lib/types'
 import ClientsTable from '@/components/ClientsTable'
+import ClientsTableSkeleton from '@/components/ClientsTableSkeleton'
 import { RefreshCw } from 'lucide-react'
 
 export default function SegmentBPage() {
@@ -47,9 +48,7 @@ export default function SegmentBPage() {
       </div>
 
       {loading ? (
-        <div className="bg-[#13161e] border border-[#252836] rounded-2xl p-12 text-center text-[#8b92a5]">
-          Loading clients from Redshift…
-        </div>
+        <ClientsTableSkeleton />
       ) : (
         <>
           {lastFetched && (

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { MessageCircle, Mail, Send, ChevronDown, ChevronUp, Search, AlertTriangle } from 'lucide-react'
+import { MessageCircle, Mail, Send, ChevronDown, ChevronUp, Search, AlertTriangle, PartyPopper, SearchX } from 'lucide-react'
 import type { KybClient } from '@/lib/types'
 import { formatDate, getUrgencyColor } from '@/lib/utils'
 import { routeSegmentB } from '@/lib/kyb-templates'
@@ -209,8 +209,24 @@ export default function ClientsTable({ clients, segment, onRefresh }: ClientsTab
             <tbody className="divide-y divide-[#252836]">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-[#8b92a5]">
-                    No clients found.
+                  <td colSpan={8} className="px-4 py-16 text-center text-[#8b92a5]">
+                    {clients.length === 0 ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <PartyPopper size={28} className="text-[#6c63ff]" />
+                        <p className="text-white font-medium">Nobody in this segment right now</p>
+                        <p className="text-sm max-w-xs">
+                          {segment === 'A'
+                            ? "Every recent signup has either started KYB or hasn't hit the 3-day threshold yet."
+                            : 'No client has a pending document request waiting on a response.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <SearchX size={28} className="text-[#8b92a5]" />
+                        <p className="text-white font-medium">No matches</p>
+                        <p className="text-sm">Try a different search term{segment === 'B' ? ' or clear the "needs review" filter' : ''}.</p>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ) : (

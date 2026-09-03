@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import type { ContactLog } from '@/lib/types'
 import { formatDateTime, getStatusColor, getStatusLabel } from '@/lib/utils'
-import { MessageCircle, Mail, Search, Filter, Webhook } from 'lucide-react'
+import { MessageCircle, Mail, Search, Filter, Webhook, Inbox, SearchX } from 'lucide-react'
+import { Skeleton } from '@/components/Skeleton'
 
 const STATUS_OPTIONS = ['all', 'sent', 'delivered', 'responded', 'failed', 'opted_out', 'no_response'] as const
 const SEGMENT_OPTIONS = ['all', 'A', 'B'] as const
@@ -31,9 +32,26 @@ function WebhookEventsPanel() {
   return (
     <div className="bg-[#13161e] border border-[#252836] rounded-2xl overflow-hidden">
       {loading ? (
-        <div className="p-12 text-center text-[#8b92a5]">Loading webhook events…</div>
+        <div className="divide-y divide-[#252836]">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="px-4 py-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <Skeleton className="h-3 w-48" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          ))}
+        </div>
       ) : events.length === 0 ? (
-        <div className="p-12 text-center text-[#8b92a5]">No webhook events received yet.</div>
+        <div className="p-16 flex flex-col items-center gap-2 text-center text-[#8b92a5]">
+          <Inbox size={28} className="text-[#8b92a5]" />
+          <p className="text-white font-medium">No webhook events yet</p>
+          <p className="text-sm max-w-xs">
+            Once Zendly reports a delivery or a reply, its raw payload will show up here.
+          </p>
+        </div>
       ) : (
         <div className="divide-y divide-[#252836]">
           {events.map(e => (
@@ -154,7 +172,19 @@ export default function ContactsPage() {
       {/* Table */}
       <div className="bg-[#13161e] border border-[#252836] rounded-2xl overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-[#8b92a5]">Loading contacts…</div>
+          <div className="divide-y divide-[#252836]">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="px-4 py-3.5 flex items-center gap-4">
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="h-4 w-20 hidden md:block" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -171,8 +201,20 @@ export default function ContactsPage() {
               <tbody className="divide-y divide-[#252836]">
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-[#8b92a5]">
-                      No contacts found.
+                    <td colSpan={6} className="px-4 py-16 text-center text-[#8b92a5]">
+                      {contacts.length === 0 ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <Inbox size={28} className="text-[#8b92a5]" />
+                          <p className="text-white font-medium">No messages sent yet</p>
+                          <p className="text-sm max-w-xs">Every WhatsApp and email follow-up, manual or automated, will show up here.</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <SearchX size={28} className="text-[#8b92a5]" />
+                          <p className="text-white font-medium">No matches</p>
+                          <p className="text-sm">Try a different search term or filter.</p>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ) : filtered.map(c => (
