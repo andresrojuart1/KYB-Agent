@@ -1,13 +1,25 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Save, RefreshCw, MessageCircle, Mail, Calendar, Hash } from 'lucide-react'
+import { Save, RefreshCw, MessageCircle, Mail, Calendar, Hash, History, AlertCircle, CheckCircle2 } from 'lucide-react'
 
 interface Settings {
   max_follow_ups: string
   primary_channel: string
   cron_enabled: string
   cron_schedule: string
+}
+
+interface CronRun {
+  id: string
+  ran_at: string
+  success: boolean
+  skipped_reason: string | null
+  total_eligible: number | null
+  sent: number | null
+  skipped: number | null
+  needs_review: number | null
+  errors: string[] | null
 }
 
 export default function SettingsPage() {
@@ -20,6 +32,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [runs, setRuns] = useState<CronRun[]>([])
+  const [runsLoading, setRunsLoading] = useState(true)
 
   useEffect(() => {
     fetch('/api/settings')
@@ -28,6 +42,11 @@ export default function SettingsPage() {
         if (d.settings) setSettings(d.settings)
       })
       .finally(() => setLoading(false))
+
+    fetch('/api/cron-runs')
+      .then(r => r.json())
+      .then(d => setRuns(d.runs ?? []))
+      .finally(() => setRunsLoading(false))
   }, [])
 
   const handleSave = async () => {
@@ -156,8 +175,58 @@ export default function SettingsPage() {
                 <option value="twice_weekly">Twice a week (Mon + Thu)</option>
               </select>
               <p className="text-xs text-[#8b92a5] mt-2">
-                Note: the actual cron trigger is defined in <code className="text-[#a78bfa]">vercel.json</code>. This setting controls whether the cron is processed when triggered.
+                Note: this dropdown does not set the real trigger frequency &mdash; it&apos;s a label only. The actual
+                trigger (Vercel Cron, a Supabase <code className="text-[#a78bfa]">pg_cron</code> job, or
+                something else) is configured outside this app. This toggle only controls whether{' '}
+                <code className="text-[#a78bfa]">/api/cron</code> does anything when that trigger fires. See
+                &ldquo;Recent Cron Runs&rdquo; below to check it&apos;s actually running.
               </p>
+            </div>
+          )}
+        </div>
+
+        {/* Recent cron runs */}
+        <div className="bg-[#13161e] border border-[#252836] rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-[#1a1e28] flex items-center justify-center">
+              <History size={16} className="text-[#6c63ff]" />
+            </div>
+            <div>
+              <p className="text-white font-medium text-sm">Recent Cron Runs</p>
+              <p className="text-[#8b92a5] text-xs">Last 20 invocations of /api/cron, whoever triggered them.</p>
+            </div>
+          </div>
+
+          {runsLoading ? (
+            <p className="text-[#8b92a5] text-sm">Loading…</p>
+          ) : runs.length === 0 ? (
+            <p className="text-[#8b92a5] text-sm">No runs recorded yet.</p>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {runs.map(run => (
+                <div key={run.id} className="flex items-center gap-3 bg-[#1a1e28] rounded-xl px-3 py-2.5 text-xs">
+                  {run.success ? (
+                    <CheckCircle2 size={14} className="text-green-400 shrink-0" />
+                  ) : (
+                    <AlertCircle size={14} className="text-red-400 shrink-0" />
+                  )}
+                  <span className="text-[#8b92a5] shrink-0 w-36">
+                    {new Date(run.ran_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  {run.skipped_reason ? (
+                    <span className="text-[#8b92a5]">{run.skipped_reason}</span>
+                  ) : run.success ? (
+                    <span className="text-[#f0f2f7]">
+                      {run.sent ?? 0} sent · {run.skipped ?? 0} skipped · {run.needs_review ?? 0} needs review
+                      {run.errors && run.errors.length > 0 && (
+                        <span className="text-orange-400"> · {run.errors.length} error{run.errors.length > 1 ? 's' : ''}</span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-red-400 truncate">{run.errors?.[0] ?? 'Run failed'}</span>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

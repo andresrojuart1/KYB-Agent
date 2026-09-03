@@ -3,12 +3,62 @@
 import { useEffect, useState } from 'react'
 import type { ContactLog } from '@/lib/types'
 import { formatDateTime, getStatusColor, getStatusLabel } from '@/lib/utils'
-import { MessageCircle, Mail, Search, Filter } from 'lucide-react'
+import { MessageCircle, Mail, Search, Filter, Webhook } from 'lucide-react'
 
 const STATUS_OPTIONS = ['all', 'sent', 'delivered', 'responded', 'failed', 'opted_out', 'no_response'] as const
 const SEGMENT_OPTIONS = ['all', 'A', 'B'] as const
 
+interface WebhookEvent {
+  id: string
+  zendly_workflow_id: string | null
+  cod_client: string | null
+  event_type: string | null
+  payload: Record<string, unknown>
+  received_at: string
+}
+
+function WebhookEventsPanel() {
+  const [events, setEvents] = useState<WebhookEvent[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/webhook-events')
+      .then(r => r.json())
+      .then(d => setEvents(d.events ?? []))
+      .finally(() => setLoading(false))
+  }, [])
+
+  return (
+    <div className="bg-[#13161e] border border-[#252836] rounded-2xl overflow-hidden">
+      {loading ? (
+        <div className="p-12 text-center text-[#8b92a5]">Loading webhook events…</div>
+      ) : events.length === 0 ? (
+        <div className="p-12 text-center text-[#8b92a5]">No webhook events received yet.</div>
+      ) : (
+        <div className="divide-y divide-[#252836]">
+          {events.map(e => (
+            <div key={e.id} className="px-4 py-3.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-white text-sm font-medium">{e.event_type ?? 'unknown event'}</span>
+                  {e.cod_client && <span className="text-[#8b92a5] text-xs">{e.cod_client}</span>}
+                </div>
+                <span className="text-[#8b92a5] text-xs">{formatDateTime(e.received_at)}</span>
+              </div>
+              <div className="text-[#8b92a5] text-xs mb-1">workflow: {e.zendly_workflow_id ?? '—'}</div>
+              <pre className="text-[10px] text-[#8b92a5] bg-[#1a1e28] rounded-lg p-2 overflow-x-auto max-h-32">
+                {JSON.stringify(e.payload, null, 2)}
+              </pre>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ContactsPage() {
+  const [tab, setTab] = useState<'messages' | 'webhooks'>('messages')
   const [contacts, setContacts] = useState<ContactLog[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -34,11 +84,37 @@ export default function ContactsPage() {
 
   return (
     <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Contact History</h1>
-        <p className="text-[#8b92a5] mt-1">All follow-up messages sent to KYB clients.</p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Contact History</h1>
+          <p className="text-[#8b92a5] mt-1">All follow-up messages sent to KYB clients.</p>
+        </div>
+        <div className="flex gap-1 bg-[#13161e] border border-[#252836] rounded-xl p-1">
+          <button
+            onClick={() => setTab('messages')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              tab === 'messages' ? 'bg-[#6c63ff] text-white' : 'text-[#8b92a5] hover:text-white'
+            }`}
+          >
+            <MessageCircle size={14} />
+            Messages
+          </button>
+          <button
+            onClick={() => setTab('webhooks')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              tab === 'webhooks' ? 'bg-[#6c63ff] text-white' : 'text-[#8b92a5] hover:text-white'
+            }`}
+          >
+            <Webhook size={14} />
+            Webhook Events
+          </button>
+        </div>
       </div>
 
+      {tab === 'webhooks' ? (
+        <WebhookEventsPanel />
+      ) : (
+        <>
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
         <div className="relative flex-1 min-w-48">
@@ -147,6 +223,8 @@ export default function ContactsPage() {
           {filtered.length} records
         </div>
       </div>
+        </>
+      )}
     </div>
   )
 }

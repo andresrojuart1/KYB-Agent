@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { MessageCircle, Mail, Send, ChevronDown, ChevronUp, Search } from 'lucide-react'
+import { useMemo, useState, useTransition } from 'react'
+import { MessageCircle, Mail, Send, ChevronDown, ChevronUp, Search, AlertTriangle } from 'lucide-react'
 import type { KybClient } from '@/lib/types'
 import { formatDate, getUrgencyColor } from '@/lib/utils'
+import { routeSegmentB } from '@/lib/kyb-templates'
 import SendModal from './SendModal'
 
 interface ClientsTableProps {
@@ -14,6 +15,7 @@ interface ClientsTableProps {
 
 export default function ClientsTable({ clients, segment, onRefresh }: ClientsTableProps) {
   const [search, setSearch] = useState('')
+  const [onlyNeedsReview, setOnlyNeedsReview] = useState(false)
   const [selected, setSelected] = useState<KybClient | null>(null)
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [sortKey, setSortKey] = useState<keyof KybClient>('days_since_last_login')
@@ -21,12 +23,25 @@ export default function ClientsTable({ clients, segment, onRefresh }: ClientsTab
   const [bulkLoading, setBulkLoading] = useState(false)
   const [, startTransition] = useTransition()
 
+  // Segment B only: whether the cron would auto-send this client or leave it for
+  // manual review (unsanitizable pending doc title). Computed once per client list
+  // so the badge/filter below don't re-run the routing logic on every render.
+  const needsReviewByClient = useMemo(() => {
+    if (segment !== 'B') return new Map<string, boolean>()
+    return new Map(clients.map(c => [c.cod_client, routeSegmentB(c.pending_docs_list).kind === 'needs_review']))
+  }, [clients, segment])
+
+  const needsReviewCount = segment === 'B'
+    ? clients.filter(c => needsReviewByClient.get(c.cod_client)).length
+    : 0
+
   const filtered = clients
     .filter(c =>
       c.company?.toLowerCase().includes(search.toLowerCase()) ||
       c.cod_client?.toLowerCase().includes(search.toLowerCase()) ||
       c.email?.toLowerCase().includes(search.toLowerCase())
     )
+    .filter(c => !onlyNeedsReview || needsReviewByClient.get(c.cod_client))
     .sort((a, b) => {
       const av = a[sortKey] ?? ''
       const bv = b[sortKey] ?? ''
@@ -98,6 +113,20 @@ export default function ClientsTable({ clients, segment, onRefresh }: ClientsTab
             className="w-full pl-9 pr-4 py-2.5 bg-[#1a1e28] border border-[#252836] rounded-xl text-sm text-white placeholder-[#8b92a5] focus:outline-none focus:border-[#6c63ff]/50"
           />
         </div>
+
+        {segment === 'B' && needsReviewCount > 0 && (
+          <button
+            onClick={() => setOnlyNeedsReview(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors border ${
+              onlyNeedsReview
+                ? 'bg-orange-400/15 border-orange-400/50 text-orange-400'
+                : 'border-[#252836] text-[#8b92a5] hover:border-orange-400/50 hover:text-orange-400'
+            }`}
+          >
+            <AlertTriangle size={14} />
+            {onlyNeedsReview ? 'Showing' : 'Show'} {needsReviewCount} needing review
+          </button>
+        )}
 
         {selectedRows.size > 0 && (
           <div className="flex gap-2">
@@ -196,7 +225,18 @@ export default function ClientsTable({ clients, segment, onRefresh }: ClientsTab
                       />
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="font-medium text-white">{client.company}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-white">{client.company}</span>
+                        {needsReviewByClient.get(client.cod_client) && (
+                          <span
+                            className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-orange-400/15 text-orange-400"
+                            title="The cron can't auto-send this one — a pending doc title couldn't be safely sanitized. Send it manually."
+                          >
+                            <AlertTriangle size={10} />
+                            Needs Review
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[#8b92a5] text-xs">{client.cod_client}</div>
                     </td>
                     <td className="px-4 py-3.5 hidden md:table-cell">
