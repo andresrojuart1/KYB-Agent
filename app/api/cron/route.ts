@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
   const settings = Object.fromEntries((settingsData ?? []).map(r => [r.key, r.value]))
 
   if (settings.cron_enabled !== 'true') {
+    await supabaseAdmin.from('cron_runs').insert({ success: true, skipped_reason: 'Cron disabled in settings' })
     return NextResponse.json({ skipped: true, reason: 'Cron disabled in settings' })
   }
 
@@ -129,6 +130,15 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    await supabaseAdmin.from('cron_runs').insert({
+      success: true,
+      total_eligible: eligible.length,
+      sent,
+      skipped,
+      needs_review: needsReview,
+      errors,
+    })
+
     return NextResponse.json({
       success: true,
       total_eligible: eligible.length,
@@ -140,6 +150,8 @@ export async function GET(req: NextRequest) {
     })
   } catch (error) {
     console.error('Cron error:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    await supabaseAdmin.from('cron_runs').insert({ success: false, errors: [message] })
     return NextResponse.json({ error: 'Cron job failed' }, { status: 500 })
   }
 }

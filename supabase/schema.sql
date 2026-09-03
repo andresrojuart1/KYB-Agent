@@ -31,6 +31,20 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   received_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Summary of each /api/cron invocation, for visibility into the automated run
+-- (the frontend has no other way to tell if the hourly trigger is healthy)
+CREATE TABLE IF NOT EXISTS cron_runs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  ran_at TIMESTAMPTZ DEFAULT NOW(),
+  success BOOLEAN NOT NULL,
+  skipped_reason VARCHAR(255),
+  total_eligible INT,
+  sent INT,
+  skipped INT,
+  needs_review INT,
+  errors JSONB
+);
+
 -- App-wide settings (max follow-ups, channel preferences, cron)
 CREATE TABLE IF NOT EXISTS settings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -55,3 +69,4 @@ CREATE INDEX IF NOT EXISTS idx_contacts_status ON contacts_log(status);
 CREATE INDEX IF NOT EXISTS idx_contacts_segment ON contacts_log(segment);
 CREATE INDEX IF NOT EXISTS idx_webhook_workflow_id ON webhook_events(zendly_workflow_id);
 CREATE INDEX IF NOT EXISTS idx_webhook_received_at ON webhook_events(received_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cron_runs_ran_at ON cron_runs(ran_at DESC);
