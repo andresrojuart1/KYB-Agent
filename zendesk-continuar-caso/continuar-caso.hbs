@@ -1,0 +1,111 @@
+<!--
+  Página "Continuar mi caso" (Ontop Support)
+  Plantilla personalizada del Help Center: templates/custom_pages/continuar-caso.hbs
+  URL pública: /hc/<idioma>/p/continuar-caso?t=...&e=...&l=...&s=...
+  El correo de cierre trae ese enlace firmado. La página valida el enlace y envía el mensaje
+  al flujo de n8n "Seguimiento automático" (webhooks continuar-caso / continuar-caso-enviar),
+  que crea el ticket de seguimiento en Zendesk. No borrar ni renombrar sin avisar a Soporte.
+-->
+<style>
+  .oc-wrap{max-width:600px;margin:40px auto 56px;padding:0 16px;font-family:Inter,"Helvetica Neue",Helvetica,Arial,sans-serif;color:#344054}
+  .oc-card{background:#fff;border:1px solid #E4DCFD;border-radius:24px;padding:32px 28px;box-shadow:0 8px 32px rgba(41,25,96,.08)}
+  .oc-card h1{margin:0 0 12px;font-size:26px;line-height:1.25;font-weight:600;color:#000;text-align:center}
+  .oc-card p{margin:0 0 16px;font-size:15px;line-height:1.6;text-align:center}
+  .oc-card textarea{width:100%;box-sizing:border-box;min-height:160px;padding:14px;border:1px solid #D3C5FC;border-radius:16px;font:inherit;font-size:15px;color:#000;resize:vertical;background:#F5F2FF}
+  .oc-card textarea:focus{outline:2px solid #7A50F7;border-color:#7A50F7}
+  .oc-btn{display:block;margin:20px auto 0;border:0;border-radius:999px;padding:14px 40px;font:inherit;font-size:15px;font-weight:600;color:#fff;background:linear-gradient(90deg,#7A50F7 0%,#281782 100%);cursor:pointer}
+  .oc-btn[disabled]{opacity:.6;cursor:default}
+  .oc-nota{margin-top:20px !important;font-size:12px !important;color:#667085}
+  .oc-firma{margin-top:24px !important;font-weight:700;color:#000;font-size:14px !important}
+  .oc-oculto{display:none}
+  .oc-carga{width:28px;height:28px;margin:8px auto 16px;border:3px solid #E4DCFD;border-top-color:#7A50F7;border-radius:50%;animation:oc-giro .8s linear infinite}
+  @keyframes oc-giro{to{transform:rotate(360deg)} }
+</style>
+
+<div class="oc-wrap">
+  <div class="oc-card">
+    <div id="oc-cargando"><div class="oc-carga"></div></div>
+    <div id="oc-mensaje" class="oc-oculto"><h1 id="oc-msg-titulo"></h1><p id="oc-msg-texto"></p></div>
+    <form id="oc-form" class="oc-oculto">
+      <h1 id="oc-titulo"></h1>
+      <p id="oc-intro"></p>
+      <textarea id="oc-texto" required maxlength="5000"></textarea>
+      <button id="oc-enviar" class="oc-btn" type="submit"></button>
+      <p id="oc-seguridad" class="oc-nota"></p>
+    </form>
+    <p id="oc-firma" class="oc-firma"></p>
+  </div>
+</div>
+
+<script>
+(function () {
+  var N8N = 'https://n8n.tools.getontop.com/webhook/continuar-caso';
+  var TXT = {"es": {"titulo": "Continuemos con tu caso {ticket}", "intro": "Cuéntanos qué necesitas. Un especialista retomará tu caso con todo su historial, así que no tendrás que explicar nada de nuevo.", "placeholder": "Escribe aquí tu mensaje…", "enviar": "Enviar", "listoT": "¡Listo! Retomamos tu caso {ticket}", "listo": "Recibimos tu mensaje. Un especialista te responderá por correo lo antes posible.", "invalidoT": "Este enlace no es válido o ya venció", "invalido": "Si aún necesitas ayuda, escríbenos a support@getontop.com o por WhatsApp y con gusto te ayudamos.", "errorT": "No pudimos enviar tu mensaje", "error": "Inténtalo de nuevo en unos minutos. Si el problema continúa, escríbenos a support@getontop.com.", "vacioT": "Tu mensaje está vacío", "vacio": "Escribe lo que necesitas para que podamos ayudarte.", "seguridad": "Por tu seguridad, nunca compartas contraseñas, códigos de verificación ni los datos completos de tu tarjeta.", "firma": "Equipo de Soporte Ontop", "usadoT": "Este enlace ya fue usado", "usado": "Ya recibimos tu mensaje y un especialista está revisando tu caso. Te responderemos lo antes posible."}, "en": {"titulo": "Let's continue with your case {ticket}", "intro": "Tell us what you need. A specialist will pick up your case with its full history, so you won't need to explain anything again.", "placeholder": "Write your message here…", "enviar": "Send", "listoT": "Done! We're picking up your case {ticket}", "listo": "We received your message. A specialist will reply by email as soon as possible.", "invalidoT": "This link is invalid or has expired", "invalido": "If you still need help, write to us at support@getontop.com or on WhatsApp and we'll gladly help.", "errorT": "We couldn't send your message", "error": "Please try again in a few minutes. If the problem continues, write to us at support@getontop.com.", "vacioT": "Your message is empty", "vacio": "Write what you need so we can help you.", "seguridad": "For your security, never share passwords, verification codes or full card details.", "firma": "Ontop Support Team", "usadoT": "This link has already been used", "usado": "We've already received your message and a specialist is reviewing your case. We'll get back to you as soon as possible."}, "pt": {"titulo": "Vamos continuar com seu caso {ticket}", "intro": "Conte o que você precisa. Um especialista retomará seu caso com todo o histórico, então você não precisará explicar nada de novo.", "placeholder": "Escreva sua mensagem aqui…", "enviar": "Enviar", "listoT": "Pronto! Retomamos seu caso {ticket}", "listo": "Recebemos sua mensagem. Um especialista vai responder por e-mail o quanto antes.", "invalidoT": "Este link não é válido ou expirou", "invalido": "Se ainda precisar de ajuda, escreva para support@getontop.com ou pelo WhatsApp e teremos prazer em ajudar.", "errorT": "Não conseguimos enviar sua mensagem", "error": "Tente novamente em alguns minutos. Se o problema continuar, escreva para support@getontop.com.", "vacioT": "Sua mensagem está vazia", "vacio": "Escreva o que você precisa para que possamos ajudar.", "seguridad": "Para sua segurança, nunca compartilhe senhas, códigos de verificação ou os dados completos do seu cartão.", "firma": "Equipe de Suporte Ontop", "usadoT": "Este link já foi usado", "usado": "Já recebemos sua mensagem e um especialista está analisando seu caso. Vamos responder o quanto antes."} };
+
+  var q = new URLSearchParams(window.location.search);
+  var datos = { t: (q.get('t') || '').replace(/[^0-9]/g, ''), e: (q.get('e') || '').replace(/[^0-9]/g, ''), l: q.get('l') || '', s: q.get('s') || '' };
+  var ruta = window.location.pathname.toLowerCase();
+  var lang = ['es', 'en', 'pt'].indexOf(datos.l) >= 0 ? datos.l : (ruta.indexOf('/en-') >= 0 ? 'en' : (ruta.indexOf('/pt-') >= 0 ? 'pt' : 'es'));
+  datos.l = lang;
+  var x = TXT[lang];
+  var conTicket = function (s) { return String(s).split('{ticket}').join(datos.t ? '#' + datos.t : ''); };
+  var el = function (id) { return document.getElementById(id); };
+
+  el('oc-firma').textContent = x.firma;
+
+  function mostrar(clave) {
+    el('oc-cargando').className = 'oc-oculto';
+    el('oc-form').className = 'oc-oculto';
+    el('oc-mensaje').className = '';
+    el('oc-msg-titulo').textContent = conTicket(x[clave + 'T']);
+    el('oc-msg-texto').textContent = x[clave];
+  }
+
+  function mostrarFormulario() {
+    el('oc-cargando').className = 'oc-oculto';
+    el('oc-titulo').textContent = conTicket(x.titulo);
+    el('oc-intro').textContent = x.intro;
+    el('oc-texto').placeholder = x.placeholder;
+    el('oc-enviar').textContent = x.enviar;
+    el('oc-seguridad').textContent = x.seguridad;
+    el('oc-form').className = '';
+  }
+
+  function parametros(extra) {
+    var p = new URLSearchParams();
+    p.set('t', datos.t); p.set('e', datos.e); p.set('l', datos.l); p.set('s', datos.s); p.set('formato', 'json');
+    for (var k in extra) { p.set(k, extra[k]); }
+    return p;
+  }
+
+  if (!datos.t || !datos.e || !datos.s) { mostrar('invalido'); return; }
+
+  // 1) Validar el enlace (firma, vencimiento y si ya se usó)
+  fetch(N8N + '?' + parametros({}).toString())
+    .then(function (r) { return r.json(); })
+    .then(function (r) {
+      if (r.estado === 'ok') { mostrarFormulario(); }
+      else if (r.estado === 'usado') { mostrar('usado'); }
+      else { mostrar('invalido'); }
+    })
+    .catch(function () { mostrar('error'); });
+
+  // 2) Enviar el mensaje del cliente
+  el('oc-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var texto = el('oc-texto').value.trim();
+    if (!texto) { el('oc-texto').focus(); return; }
+    el('oc-enviar').disabled = true;
+    fetch(N8N + '-enviar', { method: 'POST', body: parametros({ mensaje: texto }) })
+      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (r.estado === 'listo') { mostrar('listo'); }
+        else if (r.estado === 'usado') { mostrar('usado'); }
+        else if (r.estado === 'invalido') { mostrar('invalido'); }
+        else if (r.estado === 'vacio') { el('oc-enviar').disabled = false; el('oc-texto').focus(); }
+        else { mostrar('error'); }
+      })
+      .catch(function () { mostrar('error'); });
+  });
+})();
+</script>
