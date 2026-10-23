@@ -11,6 +11,9 @@
   .oc-nota{margin-top:20px !important;font-size:12px !important;color:#667085}
   .oc-firma{margin-top:24px !important;font-weight:700;color:#000;font-size:14px !important}
   .oc-oculto{display:none}
+  /* Ocultar extras del tema en este artículo (autor, compartir, votos, comentarios, artículos relacionados, migas de pan) */
+  [class*="article-author"],[class*="article-meta"],[class*="article-avatar"],[class*="share"],[class*="article-vote"],[class*="article-votes"],[class*="article-comments"],[class*="comment-"],[class*="article-relatives"],[class*="related-articles"],[class*="recent-articles"],[class*="article-sidebar"],[class*="section-articles"],[class*="article-subscribe"],[class*="article-return-to-top"],[class*="breadcrumb"]{display:none !important}
+  .oc-oculta-tema{display:none !important}
   .oc-carga{width:28px;height:28px;margin:8px auto 16px;border:3px solid #E4DCFD;border-top-color:#7A50F7;border-radius:50%;animation:oc-giro .8s linear infinite}
   @keyframes oc-giro{to{transform:rotate(360deg)} }
 </style>
@@ -45,6 +48,24 @@
   var el = function (id) { return document.getElementById(id); };
 
   el('oc-firma').textContent = x.firma;
+
+  // Ocultar el título del artículo (la tarjeta ya trae el suyo) y la barra lateral "Artículos en esta sección"
+  function ocultarExtras() {
+  try {
+      var propio = el('oc-titulo').parentNode.parentNode;
+      var hs = document.querySelectorAll('h1');
+      for (var i = 0; i < hs.length; i++) { if (!propio.contains(hs[i]) && !el('oc-mensaje').contains(hs[i])) { hs[i].classList.add('oc-oculta-tema'); } }
+      var textos = ['Artículos en esta sección', 'Articles in this section', 'Artigos nesta seção', 'Artículos relacionados', 'Related articles', 'Artigos relacionados'];
+      var cajas = document.querySelectorAll('h2, h3, h4');
+      for (var j = 0; j < cajas.length; j++) {
+        if (textos.indexOf(cajas[j].textContent.trim()) >= 0) {
+          var caja = cajas[j].parentNode;
+          if (caja && !caja.contains(el('oc-form'))) { caja.classList.add('oc-oculta-tema'); }
+        }
+      }
+    } catch (err) {}
+  }
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', ocultarExtras); } else { ocultarExtras(); }
 
   function mostrar(clave) {
     el('oc-cargando').className = 'oc-oculto';
