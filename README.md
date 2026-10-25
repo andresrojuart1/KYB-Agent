@@ -1,4 +1,4 @@
-# KYB Agent
+# Certificates and Services
 
 Automated re-engagement system for Ontop clients who haven't completed (or finished) their KYB (Know Your Business) verification. It queries Redshift for two client segments, sends WhatsApp/email nudges through Zendly, and logs everything to Supabase. A small Next.js dashboard lets ops review and manually send/override.
 

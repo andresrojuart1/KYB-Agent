@@ -35,10 +35,10 @@ export default function Sidebar() {
       <div className="px-5 py-6 border-b border-[#252836]">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#6c63ff] to-[#a78bfa] flex items-center justify-center text-white font-bold">
-            K
+            CS
           </div>
           <div>
-            <div className="text-white font-semibold text-sm leading-tight">KYB Agent</div>
+            <div className="text-white font-semibold text-sm leading-tight">Certificates and Services</div>
             <div className="text-[#8b92a5] text-xs">by Ontop</div>
           </div>
         </div>

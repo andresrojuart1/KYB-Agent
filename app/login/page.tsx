@@ -17,10 +17,10 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="flex items-center gap-3 mb-10 justify-center">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#6c63ff] to-[#a78bfa] flex items-center justify-center text-white font-bold text-lg">
-            K
+            CS
           </div>
           <div>
-            <div className="text-white font-semibold text-lg leading-tight">KYB Agent</div>
+            <div className="text-white font-semibold text-lg leading-tight">Certificates and Services</div>
             <div className="text-[#8b92a5] text-xs">by Ontop</div>
           </div>
         </div>

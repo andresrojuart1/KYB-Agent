@@ -1,4 +1,4 @@
--- KYB Agent - Supabase Schema
+-- Certificates and Services - Supabase Schema
 -- Run this in your Supabase SQL editor
 
 -- Track every follow-up message sent to a client

@@ -6,7 +6,7 @@ import { SessionProvider } from 'next-auth/react'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'KYB Agent – Ontop',
+  title: 'Certificates and Services – Ontop',
   description: 'KYB re-engagement agent for Ontop clients',
 }
 
