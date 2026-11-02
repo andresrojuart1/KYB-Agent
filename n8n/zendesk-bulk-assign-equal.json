@@ -1,0 +1,370 @@
+{
+  "name": "Zendesk - Asignación masiva equitativa (4 agentes)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Asignación masiva de tickets Zendesk (partes iguales)\nReparte 107 tickets en round-robin entre **Brisa Calero, Ruben Monterrosa, Pedro Vega y Justin Mejia** (27/27/27/26).\n\n**Trigger:** manual (ejecución única).\n**Flujo:** config → buscar user IDs → repartir → `PUT /tickets/update_many` (1 llamada por agente) → esperar → revisar job status → resumen en Slack.",
+        "height": 260,
+        "width": 520,
+        "color": 4
+      },
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -340
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Credenciales a configurar\n1. **Zendesk account** (zendeskApi) — en los 3 nodos HTTP Zendesk\n2. **Slack account** (slackApi) — resumen + alerta de error\n\n### Valores a editar\n- `SUBDOMAIN` en *Set Tickets & Agents*\n- Canales Slack (`#ops-alerts`)",
+        "height": 260,
+        "width": 380,
+        "color": 3
+      },
+      "name": "Note: Credentials",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        500,
+        -340
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Por qué round-robin\nReparte ticket 1→Brisa, 2→Ruben, 3→Pedro, 4→Justin, 5→Brisa… así cada agente recibe mezcla de tickets antiguos y nuevos en vez de un bloque contiguo.\n\nSi un nombre no da **exactamente 1** agente activo en Zendesk, el flujo se detiene antes de tocar ningún ticket.",
+        "height": 240,
+        "width": 360,
+        "color": 5
+      },
+      "name": "Note: Logic",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        620,
+        280
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Run Manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== CONFIGURACIÓN =====\nconst SUBDOMAIN = 'TU_SUBDOMINIO'; // ej: 'ontop' para ontop.zendesk.com\nconst AGENTS = ['Brisa Calero', 'Ruben Monterrosa', 'Pedro Vega', 'Justin Mejia'];\nconst TICKET_IDS = [244987, 245129, 245620, 245653, 245870, 245907, 246077, 246217, 246299, 246308, 246399, 246430, 246516, 246595, 246591, 246567, 246631, 246629, 246623, 246632, 246676, 246688, 246695, 246679, 246729, 246741, 246760, 246762, 246781, 246814, 246837, 246860, 246838, 246846, 246861, 246876, 246858, 246857, 246874, 246842, 246878, 246863, 246888, 246869, 246875, 246853, 246880, 246879, 246903, 245894, 246010, 246169, 246269, 246391, 246355, 246411, 246460, 246471, 246491, 246501, 246502, 246479, 246530, 246535, 246603, 246610, 246599, 246639, 246649, 246685, 246670, 246715, 246722, 246800, 246797, 246791, 246845, 246902, 246917, 241587, 246197, 246429, 246590, 246665, 246699, 246859, 246889, 246864, 246873, 246897, 246849, 246911, 246924, 246867, 246928, 246901, 246909, 246898, 246919, 246887, 246937, 246940, 246946, 246913, 246945, 246938, 246836];\n// ==========================\n\nconst unique = [...new Set(TICKET_IDS.map(Number))];\nreturn AGENTS.map((name, idx) => ({ json: { name, idx, subdomain: SUBDOMAIN, ticketIds: unique } }));\n"
+      },
+      "name": "Set Tickets & Agents",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://{{ $json.subdomain }}.zendesk.com/api/v2/users/search.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.name }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Get Zendesk Agent IDs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "PLACEHOLDER_ZENDESK",
+          "name": "Zendesk account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida que cada agente tenga exactamente 1 match y reparte round-robin\nconst cfg = $('Set Tickets & Agents').all().map(i => i.json);\nconst searches = $input.all();\nconst agents = cfg.map((a, i) => {\n  const users = (searches[i].json.users || []).filter(u => ['agent','admin'].includes(u.role) && u.active !== false);\n  const exact = users.filter(u => u.name.trim().toLowerCase() === a.name.toLowerCase());\n  const pick = exact.length === 1 ? exact : users;\n  if (pick.length !== 1) {\n    throw new Error(`Agente \"${a.name}\": ${pick.length} coincidencias en Zendesk (${pick.map(u => u.name + ' <' + u.email + '>').join(', ') || 'ninguna'}). Fija su user ID manualmente.`);\n  }\n  return { name: a.name, id: pick[0].id, email: pick[0].email, tickets: [] };\n});\nconst ticketIds = cfg[0].ticketIds;\nticketIds.forEach((t, i) => agents[i % agents.length].tickets.push(t));\nreturn agents.map(a => ({ json: { ...a, count: a.tickets.length, subdomain: cfg[0].subdomain, idsCsv: a.tickets.join(',') } }));\n"
+      },
+      "name": "Build Assignment Batches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://{{ $json.subdomain }}.zendesk.com/api/v2/tickets/update_many.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ids",
+              "value": "={{ $json.idsCsv }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ticket: { assignee_id: $json.id } }) }}",
+        "options": {}
+      },
+      "name": "Update Tickets Assignee",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "PLACEHOLDER_ZENDESK",
+          "name": "Zendesk account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "amount": 20,
+        "unit": "seconds"
+      },
+      "name": "Wait For Zendesk Jobs",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        0
+      ],
+      "webhookId": "b6f1c2a4-0000-4000-8000-000000000001"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.job_status.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "options": {}
+      },
+      "name": "Get Job Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        0
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "PLACEHOLDER_ZENDESK",
+          "name": "Zendesk account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "jsCode": "const batches = $('Build Assignment Batches').all().map(i => i.json);\nconst jobs = $input.all().map(i => i.json.job_status || {});\nlet lines = [], failed = [];\nbatches.forEach((b, i) => {\n  const job = jobs[i] || {};\n  const errs = (job.results || []).filter(r => r.success === false || r.errors || r.error);\n  failed.push(...errs.map(e => `#${e.id}: ${e.errors || e.error || e.details || 'error'}`));\n  lines.push(`• ${b.name}: ${b.count} tickets (job ${job.status || 'desconocido'}${errs.length ? `, ${errs.length} con error` : ''})`);\n});\nconst text = `:white_check_mark: Asignación masiva Zendesk completada (${batches.reduce((s,b)=>s+b.count,0)} tickets)\\n` + lines.join('\\n') + (failed.length ? `\\n:warning: Fallidos:\\n` + failed.join('\\n') : '');\nreturn [{ json: { text, failedCount: failed.length } }];\n"
+      },
+      "name": "Transform Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#ops-alerts",
+          "mode": "name"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "name": "Send Slack Summary",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        0
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "PLACEHOLDER_SLACK",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "On Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#ops-alerts",
+          "mode": "name"
+        },
+        "text": "=:rotating_light: Falló la asignación masiva Zendesk\nNodo: {{ $json.execution.lastNodeExecuted }}\nError: {{ $json.execution.error.message }}\n{{ $json.execution.url }}",
+        "otherOptions": {}
+      },
+      "name": "Send Slack Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        360
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "PLACEHOLDER_SLACK",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Run Manually": {
+      "main": [
+        [
+          {
+            "node": "Set Tickets & Agents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Tickets & Agents": {
+      "main": [
+        [
+          {
+            "node": "Get Zendesk Agent IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Zendesk Agent IDs": {
+      "main": [
+        [
+          {
+            "node": "Build Assignment Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Assignment Batches": {
+      "main": [
+        [
+          {
+            "node": "Update Tickets Assignee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Tickets Assignee": {
+      "main": [
+        [
+          {
+            "node": "Wait For Zendesk Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For Zendesk Jobs": {
+      "main": [
+        [
+          {
+            "node": "Get Job Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Job Status": {
+      "main": [
+        [
+          {
+            "node": "Transform Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
