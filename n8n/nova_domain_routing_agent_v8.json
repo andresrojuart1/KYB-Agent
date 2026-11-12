@@ -1,0 +1,1078 @@
+{
+  "name": "Nova · Domain routing agent v8",
+  "nodes": [
+    {
+      "id": "0ba28ab1-eb44-44e9-8a55-dc32d6f1c6fa",
+      "name": "Note · Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -760,
+        -520
+      ],
+      "parameters": {
+        "content": "## 🤖 Nova · Domain routing agent v8 (every 5 min)\n\n**Goal:** every unassigned ticket in **Worker Support** and **Company Support** gets its real category (Zendesk directory) and its **domain owner** (CX Kickoff · Domains).\n\n**Trigger:** Schedule, every 5 minutes.\n\n**AI:** one *AI Agent* node (Claude) per ticket with tools: Zendesk conversation, requester's open tickets, category directory (Google Sheet), Onsight (MCP).\n\n**Writes:** category + assignee (+ Company Support group for clients) + 1 internal note. Never status, public replies or merges.\n\nStarts **inactive** – test with *Execute workflow* first.\n\n**v8:** reads the WhatsApp/chat *conversation log* (no more false low-context), requester search fixed, failed writes get tagged `nova_routing_failed` + Slack alert instead of retrying every 5 min.",
+        "height": 330,
+        "width": 520,
+        "color": 4
+      }
+    },
+    {
+      "id": "eafb29aa-22bb-483a-86b8-f842081cf50c",
+      "name": "Note · Credentials",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -760,
+        -160
+      ],
+      "parameters": {
+        "content": "## 🔑 Configure before running\n1. **Zendesk API** (`zendeskApi`) – subdomain `getontop`, email + API token of the Nova/API user.\n2. **Anthropic** – API key (model claude-sonnet-5, thinking OFF, no temperature).\n3. **Google Sheets OAuth** – read access to the category directory sheet.\n4. **Onsight MCP** – endpoint URL + bearer token in *Onsight (MCP)* node.\n5. **Slack** – bot token; channel for alerts (default `#cx-nova-alerts`, change in the Slack nodes).\n6. **Log sheet** – set the spreadsheet ID in *Log Routing Decision*.",
+        "height": 300,
+        "width": 520,
+        "color": 3
+      }
+    },
+    {
+      "id": "d75e8160-2bc0-400e-b702-36c49931eebb",
+      "name": "Note · Fetch",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        -360
+      ],
+      "parameters": {
+        "content": "### 1 · Fetch\nEach run loads the category options (to validate tags), and every **new/open ticket without assignee** in Worker Support + Company Support. *Filter & Prioritize* drops excluded tickets, empty Aura handoffs younger than 10 min, and caps the run at 5 tickets (newest first) so each run ends before the next one starts.",
+        "height": 200,
+        "width": 760
+      }
+    },
+    {
+      "id": "bfabd2ed-1e2a-48b8-9f84-80ff7aa883e3",
+      "name": "Note · Agent",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        -420
+      ],
+      "parameters": {
+        "content": "### 2 · Nova AI Agent\nOne Claude call per ticket. It reads the conversation, checks the directory, Onsight and duplicates, and returns structured JSON (category tag, worker/client, owner key, confidence, urgency, reason).",
+        "height": 180,
+        "width": 520
+      }
+    },
+    {
+      "id": "c43693d8-2390-4f03-8c66-1b8711529f83",
+      "name": "Note · Write",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1460,
+        -360
+      ],
+      "parameters": {
+        "content": "### 3 · Apply + safety nets\n*Build Zendesk Update* (Edit Fields expression) maps the owner key → agent ID by DOMAIN ONLY (no OOO/coverage rules — those are handled manually by Mike), sends low-context tickets to Jaime, validates the tag, and writes category + owner + internal note.\nIf Zendesk rejects it (e.g. *Payflow: needed*), *Fallback: Assign Owner Only* still assigns the owner. Urgent cases → Slack.\nThe internal note now carries the full diagnosis: Ask · Onsight facts · side conversations · duplicates · suggested action · suggested reply (customer's language).",
+        "height": 220,
+        "width": 760
+      }
+    },
+    {
+      "id": "7883249a-7e7d-44d8-a5ee-2349c0b3a1eb",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -400,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "5457a12c-1343-406d-abba-b8beb08ad01c",
+      "name": "Get Category Options",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -200,
+        0
+      ],
+      "parameters": {
+        "url": "https://getontop.zendesk.com/api/v2/ticket_fields/22865771347348.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "options": {}
+      },
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "32454750-ad62-4822-b63b-ce53b72823f6",
+      "name": "Search Unassigned Tickets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        200,
+        0
+      ],
+      "parameters": {
+        "url": "https://getontop.zendesk.com/api/v2/search.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "type:ticket status<pending assignee:none"
+            },
+            {
+              "name": "sort_by",
+              "value": "created_at"
+            },
+            {
+              "name": "sort_order",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "edbecd4c-901f-4a07-b96c-bf313a281fba",
+      "name": "Filter & Prioritize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Keep only WS + CS tickets, no assignee, not excluded, not a fresh empty handoff. Max 5 per run. Skips tickets tagged nova_routing_failed.\nconst WS = 22616861202452, CS = 23897889259668;\nconst EXCLUDED = [253224, 250770, 250793];\nconst MAX_PER_RUN = 5; // keep each run < 5 min\nconst now = Date.now();\nconst results = $input.first().json.results || [];\nconst out = [];\nfor (const t of results) {\n  if (![WS, CS].includes(t.group_id)) continue;\n  if (t.assignee_id) continue;\n  if (EXCLUDED.includes(t.id)) continue;\n  if ((t.tags || []).includes('nova_routing_failed')) continue; // both writes failed before — a human handles it\n  const ageMin = (now - new Date(t.created_at).getTime()) / 60000;\n  const looksEmptyHandoff = /^Conversation with/i.test(t.description || '') && (t.tags || []).includes('ada_messaging_handoff');\n  if (looksEmptyHandoff && ageMin < 10) continue; // next run picks it up once the customer has written\n  const cat = (t.custom_fields || []).find(f => f.id === 22865771347348)?.value || null;\n  out.push({ json: {\n    ticket_id: t.id, subject: t.subject, group_id: t.group_id, status: t.status,\n    requester_id: t.requester_id, created_at: t.created_at, current_category: cat,\n    channel: t.via?.channel, tags: t.tags,\n  }});\n  if (out.length >= MAX_PER_RUN) break;\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "e5807c85-d031-449f-9df3-3be1a3bb781e",
+      "name": "Loop Over Tickets",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        600,
+        0
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "8c933e4f-53b6-4e68-b0c2-be2025829f47",
+      "name": "Nova Routing Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Route this Zendesk ticket.\n\nTicket ID: {{ $json.ticket_id }}\nSubject: {{ $json.subject }}\nCurrent group: {{ $json.group_id == 23897889259668 ? 'Company Support' : 'Worker Support' }}\nCurrent category tag: {{ $json.current_category || '(empty)' }}\nRequester ID: {{ $json.requester_id }}\nChannel: {{ $json.channel }}\nCreated: {{ $json.created_at }}\n\nUse your tools, then return ONLY the structured output.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are **Nova**, the AI ticket-routing agent for Ontop's CX team (Worker Support + Company Support in Zendesk).\nYour job per ticket: (1) read it and DIAGNOSE it using Onsight, (2) decide the REAL category from the Zendesk category directory, decide whether the requester is a WORKER or a CLIENT (company), pick the DOMAIN OWNER, and return the JSON described by the output parser. You never write to Zendesk yourself and never reply to customers.\n\n## How to work (use your tools)\n1. `get_ticket_conversation` (comments) AND `get_conversation_log` → read what the requester actually asks. For WhatsApp / chat / native_messaging tickets the real customer messages are ONLY in the conversation log — the comments just say \"Conversation with <name>\". NEVER set low_context=true without reading the conversation log first; low_context means the customer truly wrote nothing useful (only \"hola\", \"humano\", empty).\n2. `get_category_directory` → pick the closest real category (column A = name, column B = tag). Never return \"Account::Worker General Info\" / \"Client General Info\" when the ticket has real content.\n3. `onsight_execute_sql` (ALWAYS pass connector_id `0ef9e62e-cb8e-4f3f-a3fc-1ba33f25d301`; read-only SELECT, always LIMIT 20; look the requester up by email in process_data.contractor first. SQL over Ontop data: process_data.contractor, process_data.dwh_contract, process_data.dwh_client, process_data.wallet_transaction) → confirm worker vs client, KYC status, the transaction/amount/status when money is involved. Only state verified facts.\n4. `get_requester_open_tickets` → detect possible duplicates (same requester, same issue).\n5. `get_side_conversations` → see if a team (Payouts, Tech, R&C, Card Ops…) was already asked and what they answered.\n\n## Diagnosis for the owner (internal note) — fill these fields\n- `ask`: what the customer actually needs, 1 line.\n- `onsight_facts`: ONLY verified facts from Onsight (KYC status, account/wallet status, the transaction: amount, status, date, refunds, duplicate accounts). If not verified, say \"not verified\".\n- `side_conversations`: team + what they answered / \"no reply since <time>\" / \"none\".\n- `suggested_action`: one of: reply & Solved | reply & 3. Waiting | 5. Internally raised | side conversation to <team> with category <cat> | admin action (password/token reset, unlock, attach POP) — plus a short why.\n- `suggested_reply`: a ready-to-send reply in the CUSTOMER'S language (`reply_language`), warm and concise.\n\n## Reply rules (strict)\n- No ETAs or timeframes (\"24h\", \"right away\", \"hoy\"). No provider names (bank/rail partners). No account numbers, wallet addresses, card digits. NEVER passwords or temporary passwords.\n- Never suggest \"reinstall the app\" or \"clear cache\" as the fix. Tech issues → ask for a screenshot and say we escalated with the case number.\n- Crypto: Venezuela is working again (since Nov 11). Ukraine: crypto NOT available — no VPN or workarounds; never suggest moving funds to another user.\n- Venezuelan bank \"no connection\" → delete and re-add the payment method.\n- Future Fund: never use \"safe/seguro\", \"savings/ahorro\", \"interest/interés\".\n- Legal threats, data-breach or tax/regulatory questions: suggested_reply = short acknowledgement only; suggested_action must route to R&C/Legal and set urgent=true.\n\n## Domain owners (CX Kickoff · Domains, Nov 11 2026) — return the owner KEY\n- `justin` — bank transfers: pending, rejected, on hold, recall, proof of payment (also USDC account bank transfers).\n- `sudu` — payout tech issues, dynamic token, crypto / debit card / Payoneer pending or rejected, fees & exchange rates, transaction limits, third-party verification, wallet compensation not received / incorrect amount, top-up pending, worker wallet top up/down, OOW, Euro Wallet, Ontop Pay.\n- `jaime` — Wallet Quick (advances, commissions…), USDC stablecoin account (non-payout), Future Fund, QR, utilities, wallet statement/certificate, unrecognized deduction. ALSO every LOW-CONTEXT ticket (empty handoff, only \"hola/hi/humano\", no clear ask).\n- `caro` — Ontop Card (activation, delivery, purchases, cashback, chargebacks, PIN, freeze…), Worker Journey (Reserve, Wanderlust, Concierge, transfer-fee refund), subscription top up/down.\n- `cristian` — KYC/onboarding (rejected, review, documents, reset, unfinished), account creation, registration link, account delete/reactivation/deactivation/merge. Access blocks CAUSED by KYC/Compliance review also go here.\n- `brisa` — password/access, SMS/WhatsApp OTP, hacked account, fraud or suspicious behavior, access troubleshooting, identity changes (email, phone, name, address, ID/tax ID).\n- CLIENTS (company contacts) → `samuel` for pay-ins/approvals (wire, ACH, crypto, local), Ontop+ payments, invoices, credit memos, autocharge, fees, refunds for clients, payment reports, Resolvr; `miguel` for contracts, KYB, account creation for companies, certificates of services, users & permissions, unresponsive AM/CSM, churn, and any unclear client ticket.\n- \"General questions\" are NOT left in a rotation: assign by topic using the list above.\n\n## Hard rules\n- Never invent data. If Onsight doesn't confirm something, say \"not verified\".\n- Flag `urgent=true` for: legal threats, possible account takeover/hacked, data breach, large money missing (> USD 1,000) or a worker waiting > 24 h with no reply.\n- If you are not sure, still choose the closest category/owner but set confidence to \"low\" and explain in `reason`.\n- Output in ENGLISH. Keep `reason` to one line.\n",
+          "maxIterations": 8
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "afa50e8e-1dd6-441a-8bd5-f65efdf59a94",
+      "name": "Claude (Anthropic)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        760,
+        260
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-sonnet-5"
+        },
+        "options": {
+          "maxTokensToSample": 4096
+        }
+      },
+      "credentials": {
+        "anthropicApi": {
+          "id": "fqAjOy5hTw5zKK8l",
+          "name": "Mike's Claude"
+        }
+      }
+    },
+    {
+      "id": "416cf4e7-df98-48ab-bc43-aa67c9058ac7",
+      "name": "Get Ticket Conversation",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        260
+      ],
+      "parameters": {
+        "toolDescription": "Returns the latest comments (public + internal) of a Zendesk ticket, newest first. Use it to read what the requester actually asks.",
+        "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $fromAI('ticket_id', 'Zendesk ticket ID (number)', 'number') }}/comments.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sort_order",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "30"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      }
+    },
+    {
+      "id": "16a79868-4c1a-4bf9-9d9f-5222ea60aa9e",
+      "name": "Get Requester Open Tickets",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        260
+      ],
+      "parameters": {
+        "toolDescription": "Lists the requester's other unsolved tickets (id, subject, status, assignee, category). Use it to detect duplicates.",
+        "url": "https://getontop.zendesk.com/api/v2/search.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "=type:ticket status<solved requester:{{ $fromAI('requester_id', 'Zendesk requester ID (number)', 'number') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      }
+    },
+    {
+      "id": "9c17d6bc-099f-4eeb-acf5-0cf3f633ac0c",
+      "name": "Get Category Directory",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        1180,
+        260
+      ],
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Ontop's Zendesk category directory (tab 'Categories Overview'): each row is a category with its name (e.g. 'Payouts::Bank transfer pending'), its Zendesk tag, and the owning team. Use it to choose the real category and return the exact tag.",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1tJQVhsE9QF_KPYLceQF7hqV8oc45wJppVvsydv08syI"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "921722462"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "yOY66jkPN4WkAUzQ",
+          "name": "Mike Google Sheets"
+        }
+      }
+    },
+    {
+      "id": "39ace19d-594f-468f-9678-3081e47396d6",
+      "name": "MCP Onsight",
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        260
+      ],
+      "parameters": {
+        "endpointUrl": "https://mcp.onsight.getontop.com/mcp",
+        "serverTransport": "httpStreamable",
+        "authentication": "bearerAuth",
+        "include": "selected",
+        "includeTools": [
+          "onsight_execute_sql"
+        ],
+        "options": {}
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "rDqWGxM1Gs12nCkK",
+          "name": "Mike's Onsight"
+        }
+      }
+    },
+    {
+      "id": "2eb7edd9-bc4e-4bb5-9d1d-50885bf3da61",
+      "name": "Routing Decision Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1460,
+        260
+      ],
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n \"type\": \"object\",\n \"properties\": {\n  \"ticket_id\": {\n   \"type\": \"number\"\n  },\n  \"requester_type\": {\n   \"type\": \"string\",\n   \"enum\": [\n    \"worker\",\n    \"client\"\n   ]\n  },\n  \"category_name\": {\n   \"type\": \"string\",\n   \"description\": \"Exact name from the directory, e.g. 'Payouts::Bank transfer pending'\"\n  },\n  \"category_tag\": {\n   \"type\": \"string\",\n   \"description\": \"Exact tag from the directory (column B)\"\n  },\n  \"owner_key\": {\n   \"type\": \"string\",\n   \"enum\": [\n    \"justin\",\n    \"sudu\",\n    \"jaime\",\n    \"caro\",\n    \"cristian\",\n    \"brisa\",\n    \"miguel\",\n    \"samuel\"\n   ]\n  },\n  \"confidence\": {\n   \"type\": \"string\",\n   \"enum\": [\n    \"high\",\n    \"medium\",\n    \"low\"\n   ]\n  },\n  \"low_context\": {\n   \"type\": \"boolean\"\n  },\n  \"reason\": {\n   \"type\": \"string\"\n  },\n  \"possible_duplicate_of\": {\n   \"type\": \"array\",\n   \"items\": {\n    \"type\": \"number\"\n   }\n  },\n  \"verified_facts\": {\n   \"type\": \"string\",\n   \"description\": \"Short Onsight facts that were actually verified, or 'not verified'\"\n  },\n  \"urgent\": {\n   \"type\": \"boolean\"\n  },\n  \"urgent_reason\": {\n   \"type\": \"string\"\n  },\n  \"ask\": {\n   \"type\": \"string\"\n  },\n  \"onsight_facts\": {\n   \"type\": \"string\"\n  },\n  \"side_conversations\": {\n   \"type\": \"string\"\n  },\n  \"suggested_action\": {\n   \"type\": \"string\"\n  },\n  \"suggested_reply\": {\n   \"type\": \"string\"\n  },\n  \"reply_language\": {\n   \"type\": \"string\",\n   \"description\": \"es, en, pt\\u2026\"\n  }\n },\n \"required\": [\n  \"ticket_id\",\n  \"requester_type\",\n  \"category_name\",\n  \"category_tag\",\n  \"owner_key\",\n  \"confidence\",\n  \"low_context\",\n  \"reason\",\n  \"urgent\",\n  \"ask\",\n  \"onsight_facts\",\n  \"suggested_action\",\n  \"suggested_reply\"\n ]\n}"
+      }
+    },
+    {
+      "id": "2c538cce-75c3-4432-82c9-f1638363eb6a",
+      "name": "Build Zendesk Update",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1460,
+        0
+      ],
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ (() => {\n  const d = $json.output || {};\n  const A = { justin: 54788295418644, sudu: 24567978777492, jaime: 55350915332244, caro: 32288140085012, cristian: 48493524357268, brisa: 47071350698516, miguel: 28269839522452, samuel: 40230868739348 };\n  const N = { justin: 'Justin', sudu: 'Sudu', jaime: 'Jaime', caro: 'Caro', cristian: 'Cristian', brisa: 'Brisa', miguel: 'Miguel', samuel: 'Samuel' };\n  const WS = 22616861202452, CS = 23897889259668;\n  if (!d.owner_key || !d.ticket_id) return JSON.stringify({ skip: true, urgent: false, error: 'Agent returned no decision' });\n  const lk = $('Prepare Lookups').first().json;\n  const tags = lk.tags || [];\n  let o = d.owner_key; const notes = [];\n  if (d.low_context && d.requester_type !== 'client') { o = 'jaime'; notes.push('Low-context ticket — assigned to Jaime per Mike.'); }\n  const tagOk = tags.includes(d.category_tag);\n  if (!tagOk) notes.push('Suggested category \"' + d.category_name + '\" not set: tag \"' + d.category_tag + '\" is not a valid option.');\n  if (d.requester_type === 'client' && d.confidence !== 'high') notes.push(\"I don't have a high confidence score on what the client needs — please review, and if it's not for you, assign it to \" + (o === 'miguel' ? 'Samuel' : 'Miguel') + '. Thanks! 🙌');\n  if ((d.possible_duplicate_of || []).length) notes.push('Possible duplicate of #' + d.possible_duplicate_of.join(', #') + ' — please check and merge if it is; otherwise handle as a normal ticket.');\n  const body = [\n    '🤖 Nova · Domain routing + diagnosis (n8n AI agent) · ' + $now.setZone('America/Bogota').toFormat('dd LLL HH:mm') + ' COL',\n    'Category → ' + d.category_name + ' · Owner: ' + N[o] + ' · Confidence: ' + d.confidence,\n    '• Ask: ' + (d.ask || d.reason),\n    '• Onsight: ' + (d.onsight_facts || d.verified_facts || 'not verified'),\n    '• Side conversations: ' + (d.side_conversations || 'none'),\n    '• Duplicates: ' + ((d.possible_duplicate_of || []).length ? '#' + d.possible_duplicate_of.join(', #') : 'none'),\n    '• Suggested action: ' + (d.suggested_action || '-') + ' (owner: ' + N[o] + ')',\n    '• Suggested reply' + (d.reply_language ? ' (' + d.reply_language + ')' : '') + ': \"' + (d.suggested_reply || '') + '\"',\n    'Routing reason: ' + d.reason\n  ].concat(notes).concat(['This is a suggestion — please validate before sending 🙌']).filter(Boolean).join('\\n');\n  const t = { assignee_id: A[o], comment: { public: false, body } };\n  if (tagOk) t.custom_fields = [{ id: 22865771347348, value: d.category_tag }];\n  if (d.requester_type === 'client') t.group_id = CS;\n  const f = { assignee_id: A[o], comment: { public: false, body: body + '\\n(Category could not be saved automatically — required fields missing. Please set it when working the ticket.)' } };\n  if (d.requester_type === 'client') f.group_id = CS;\n  return JSON.stringify({ skip: false, ticket_id: d.ticket_id, owner: N[o], category_name: d.category_name, confidence: d.confidence, urgent: !!d.urgent, urgent_reason: d.urgent_reason || '', update: { ticket: t }, fallback: { ticket: f } });\n})() }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "44f55523-4e07-4462-a92d-2555101399f8",
+      "name": "Update Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2480,
+        1200
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $json.ticket_id }}.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.update) }}",
+        "options": {}
+      },
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "29341f4a-539b-43f2-baef-a824932c3737",
+      "name": "Fallback: Assign Owner Only",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1900,
+        120
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $('Build Zendesk Update').item.json.ticket_id }}.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build Zendesk Update').item.json.fallback) }}",
+        "options": {}
+      },
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "c613faa6-8af8-4d35-a8a3-ea4758c97e9b",
+      "name": "Is Urgent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2120,
+        -80
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "95cd055b-003d-4b18-945d-918883c7f6b6",
+              "leftValue": "={{ $('Build Zendesk Update').item.json.urgent }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "efa650ff-e0ef-472f-a1b0-ad50cf7bca1b",
+      "name": "Send Urgent Alert to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        2340,
+        -180
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C09SPJRDY6S",
+          "mode": "id"
+        },
+        "text": "=🚨 *Urgent ticket routed* – <https://getontop.zendesk.com/agent/tickets/{{ $('Build Zendesk Update').item.json.ticket_id }}|#{{ $('Build Zendesk Update').item.json.ticket_id }}>\nOwner: *{{ $('Build Zendesk Update').item.json.owner }}* · {{ $('Build Zendesk Update').item.json.category_name }}\nWhy: {{ $('Build Zendesk Update').item.json.urgent_reason }}",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "ItnY50uWIAimuIiE",
+          "name": "Aura Service Disruption Agent"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "da7e47af-4648-4693-ab7f-63bcafdfc6b7",
+      "name": "Log Routing Decision",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2560,
+        -40
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "PLACEHOLDER_LOG_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "ticket_id": "={{ $('Build Zendesk Update').item.json.ticket_id }}",
+            "owner": "={{ $('Build Zendesk Update').item.json.owner }}",
+            "category": "={{ $('Build Zendesk Update').item.json.category_name }}",
+            "confidence": "={{ $('Build Zendesk Update').item.json.confidence }}",
+            "urgent": "={{ $('Build Zendesk Update').item.json.urgent }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "yOY66jkPN4WkAUzQ",
+          "name": "Mike Google Sheets"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "disabled": true
+    },
+    {
+      "id": "57bc029e-2276-42b8-912f-a56e89bd77df",
+      "name": "On Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        420
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "3d0ccc0e-8bbd-4605-9074-f5af57e32771",
+      "name": "Send Error Alert to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        -180,
+        420
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C09SPJRDY6S",
+          "mode": "id"
+        },
+        "text": "=⚠️ Nova routing workflow failed: {{ $json.execution.error.message }}\nNode: {{ $json.execution.lastNodeExecuted }} · {{ $json.execution.url }}",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "WZT6W2KExNG7rKOc",
+          "name": "new-initiatives-bot"
+        }
+      }
+    },
+    {
+      "id": "35ee5348-515c-4497-9221-9db2e0d8b8e6",
+      "name": "Has Decision?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2270,
+        1280
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a0fe5c8d-9748-4047-8468-f21f0555414a",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d0709381-e7f0-406f-adce-5f9de96b8688",
+      "name": "Prepare Lookups",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        790,
+        1100
+      ],
+      "parameters": {
+        "jsCode": "// Valid category tags (slim list for the Build step)\nconst tags = ($('Get Category Options').first().json.ticket_field?.custom_field_options || []).map(o => o.value);\nreturn [{ json: { tags } }];"
+      }
+    },
+    {
+      "id": "fa5c7456-d1c0-446e-b548-b609d1b9ba53",
+      "name": "Get Side Conversations",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        14000,
+        4592
+      ],
+      "parameters": {
+        "toolDescription": "Side conversations of a ticket: which team/group was asked, subject, state and last update. Use it to know if a team was already escalated and whether they answered.",
+        "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $fromAI('ticket_id', 'Zendesk ticket ID (number)', 'number') }}/side_conversations.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "options": {}
+      },
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Customer messages of WhatsApp/chat/native_messaging tickets (conversation log, newest first). ALWAYS call it for messaging tickets: their comments only say 'Conversation with <name>' and the real messages live here.",
+        "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $fromAI('ticket_id', 'Zendesk ticket ID (number)', 'number') }}/conversation_log",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page[size]",
+              "value": "30"
+            },
+            {
+              "name": "sort",
+              "value": "-created_at"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "572e6f1d-f127-433e-ba48-79c6aef2089a",
+      "name": "Get Conversation Log",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        21840,
+        9264
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $('Build Zendesk Update').item.json.ticket_id }}/tags.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"tags\":[\"nova_routing_failed\"]}",
+        "options": {}
+      },
+      "id": "f492bbd5-7030-42a3-832d-19740a5a22ef",
+      "name": "Tag Routing Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        23168,
+        9150
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "4f5bc8f4-1a13-49f7-891d-40a1ea7e6070",
+      "name": "Alert Routing Failed",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        23392,
+        9150
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C09SPJRDY6S",
+          "mode": "id"
+        },
+        "text": "=⚠️ *Nova could not route* <https://getontop.zendesk.com/agent/tickets/{{ $('Build Zendesk Update').item.json.ticket_id }}|#{{ $('Build Zendesk Update').item.json.ticket_id }}> (update and fallback both failed). Suggested owner: *{{ $('Build Zendesk Update').item.json.owner }}* · {{ $('Build Zendesk Update').item.json.category_name }}. Tagged `nova_routing_failed` so it isn't retried — please assign manually.",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "ItnY50uWIAimuIiE",
+          "name": "Aura Service Disruption Agent"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "webhookId": "c7b0f752-6cc1-4029-ba93-aff8830f4fcf"
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Category Options",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Category Options": {
+      "main": [
+        [
+          {
+            "node": "Prepare Lookups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Unassigned Tickets": {
+      "main": [
+        [
+          {
+            "node": "Filter & Prioritize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter & Prioritize": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Tickets": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Nova Routing Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nova Routing Agent": {
+      "main": [
+        [
+          {
+            "node": "Build Zendesk Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Zendesk Update": {
+      "main": [
+        [
+          {
+            "node": "Has Decision?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Ticket": {
+      "main": [
+        [
+          {
+            "node": "Is Urgent?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fallback: Assign Owner Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback: Assign Owner Only": {
+      "main": [
+        [
+          {
+            "node": "Is Urgent?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tag Routing Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Urgent?": {
+      "main": [
+        [
+          {
+            "node": "Send Urgent Alert to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Routing Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Urgent Alert to Slack": {
+      "main": [
+        [
+          {
+            "node": "Log Routing Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Routing Decision": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Send Error Alert to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (Anthropic)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Nova Routing Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Routing Decision Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Nova Routing Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Ticket Conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Routing Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Requester Open Tickets": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Routing Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Category Directory": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Routing Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP Onsight": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Routing Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Decision?": {
+      "main": [
+        [
+          {
+            "node": "Update Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Lookups": {
+      "main": [
+        [
+          {
+            "node": "Search Unassigned Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Side Conversations": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Routing Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Conversation Log": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Routing Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag Routing Failed": {
+      "main": [
+        [
+          {
+            "node": "Alert Routing Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Routing Failed": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "saveDataErrorExecution": "all"
+  },
+  "tags": []
+}
