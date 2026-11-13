@@ -1,0 +1,88 @@
+FaceMatch Initial (Ada API tool 6ac468539478230fbccf83cb) errors, 2026-11-06 to 2026-11-12 (America/Bogota)
+CSV: /home/user/KYB-Agent/reports/facematch_initial_errors_2026-11-06_12.csv
+
+TOOL
+- GET https://api-ada.getontop.com/facematch?email=<email>  (one input: email, query string; no body)
+- Response on 200: {"FaceMatch Link", "FaceMatch Worker ID"}. On failure Ada logs only "Action returned status: failed"; no response body is captured (return_values null) for 400 or 500.
+- 30-day behavior profile (Oct 9 - Nov 8): 1135 x 200, 116 x 400, 6 x 500.
+- Called from 7 playbooks: Worker Account Data Lookup, Worker Update Email, Acceso/bloqueos y token dinamico,
+  Worker Wallet Transfer Status v2, Worker Payroll Status v2, Worker Update Phone, Download Certificate of Services.
+
+ADA TOTALS (api_tool_performance, ACTIONID filter)
+- 510 calls, 71 errors (14%) across 464 conversations. Errors by day (Bogota):
+  Nov 6: 8/67 (12%) | Nov 7: 4/63 (6%) | Nov 8: 3/29 (10%) | Nov 9: 18/95 (19%) | Nov 10: 12/82 (15%) | Nov 11: 11/87 (13%) | Nov 12: 15/88 (17%)
+- Steady 6-19% every day with no spike. This is not an outage. The error rate follows call volume.
+
+CONVERSATION DISCOVERY
+- ACTIONID IS + STATUSCODE ISNOT 200 -> 30 conversations. ACTIONID IS + STATUSCODE IS 400 -> 65. ACTIONID IS + STATUSCODE IS (other error codes) -> 4.
+- Both filters apply to the whole conversation, not to the call. STATUSCODE can match another tool's status code,
+  so the 3 "500/4xx" matches that were opened turned out to be FaceMatch 200s. ISNOT 200 drops conversations where any other
+  tool returned 200, such as the WhatsApp n8n webhook. Union of the candidate lists: 67 conversations.
+- Opened 29 of the 67: 26 confirmed FaceMatch failures (29 failed calls), 3 false positives. All 26 opened from the 400 list were true failures.
+- Estimate: about 60-64 conversations affected, about 13-14% of the 464 that called the tool.
+- 38 candidates not opened (all from the STATUSCODE=400 list; most likely true 400s):
+6af506cfcb0432e80c73a2b1
+6af4e191fd19e05e3aa7c2c8
+6af4bf9e1c9483bca56b2939
+6af4af462ae828a80cc1ec04
+6af4734b636c0a52adbf27a7
+6af37475b926a15b300a0672
+6af36e020b00889d64d01522
+6af350319dd41c72d5e5f3f3
+6af33761bdd770a00262c943
+6af32a0af8822d94706f582b
+6af24f192aab7bf0ccaff990
+6af22eccd9888ef932b21af9
+6af21b02969564eb47dcc648
+6af217ad017e6fb6c07a6e95
+6af21283dbdd4282a7c23c42
+6af1fc64e0d1c53e935609e5
+6af1e9e66f6050e27355f3e3
+6af1556a5680d62ea95dbf07
+6af149b4d9c4b03af15d3fc0
+6af127cf681ea05cc396feac
+6af120c8ebe1dc860e81c855
+6af1002b5342b434bdb61f7a
+6af0d1557cd720a5b4f1a21d
+6af08d1a5387c7c72e17e992
+6aefde9357f65752392892eb
+6aef6afd9c9f3237e328a45b
+6aef5edf33e7af4c043e214f
+6aef1c87b0968c318aaa7b1e
+6aee91eebe42fb53ed46e8b6
+6aee8f656cfd0fabbc2413ff
+6aee8d995213061f99c3159c
+6aee4cadd645f7066bc32117
+6aee3f27136d7dbb17e0ee1d
+6aee3e03b1db441f8b8ee45a
+6aee0af524fe6c3fbe1d988d
+6aedfe920979ba51a57d2b04
+6aedfe29772bfe292b0183ae
+6aedf23fbb70496ea1f80499
+
+SAMPLE BREAKDOWN (29 failed calls / 26 conversations)
+By http_status: 400 = 28 (97%), 500 = 1 (3%; 6af1cb321abc6b2d34daf829, 67 ms)
+By error_message pattern: 29/29 "Action returned status: failed" with an empty response body. There is no backend message to group by.
+By channel: sunshine_whatsapp 16, chat (web/app) 10, conversations_api 3
+By language: es 22, en 7
+By day (UTC): Nov 6: 1, Nov 7: 1, Nov 9: 6, Nov 10: 6, Nov 11: 5, Nov 12: 9, Nov 13 (= Nov 12 Bogota evening): 1
+By hour (UTC): spread from 11:00 to 00:00 UTC (business hours in LatAm). No burst.
+http_duration_ms: min 67, median 388, max 446. These are fast, deterministic rejections, not timeouts.
+By playbook: Account Data Lookup 8, Acceso/bloqueos/token 8, Worker Update Email 7, Download Certificate 2, Wallet Transfer v2 2, Payroll Status v2 1, Update Phone 1
+Outcome: 29/29 -> immediate handoff (reason_code tool_failed, once issue_unresolved). 0 retries inside the playbook, 0 recoveries.
+  4 workers hit 400 again on a later re-entry with the same email (repeat contacts, 8 min to 3 days apart).
+  Where a human agent picked up, they sent a manual Veriff/identity link or did the action manually.
+
+INPUT QUALITY (sample)
+- Wrong email: Worker Update Email sent the NEW email the worker typed instead of the current account email from metadata (2 cases).
+- Typo or misspelled email sent as-is: ".con" domain (1); misspelled local part, reused 3 days later even after the user corrected it (1).
+- Not lowercased: Account Data Lookup and Wallet Transfer v2 have no "Normalize email" step, so mixed-case emails go out (2 cases; the backend may be case-sensitive).
+- Corporate-domain emails (4-5 cases). These may not be the account login email.
+- The rest (about 60%) are valid-looking emails, often taken from authenticated chat metadata, and still return 400. In one case the in-app
+  selfie flow also failed for the same worker, and the agent said the worker's "KYC/verification had been reset". This points to a backend state
+  (no eligible KYC/Veriff profile) and not to bad input.
+
+TOP 3 PATTERNS
+1. 400 with a valid logged-in email (backend rejects the account): e.g. 6af6260bcdb726d9d7ce2fce, 6af31b0ca4452c37abc5261a, 6af4eb7fc421b0e2866c8a3c
+2. 400 caused by an Ada-side input problem (wrong/new email, typo, not lowercased): e.g. 6af5a1cbd33db77eddec58b0, 6af4e1dd97205def5997ac40, 6af61efa6347ae67745e813a, 6af1c4ec922a13eafaa7c6c8
+3. 500 (rare, 1 in the sample, 6 in 30 days): 6af1cb321abc6b2d34daf829
