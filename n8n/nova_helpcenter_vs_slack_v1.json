@@ -1,0 +1,1113 @@
+{
+  "name": "Nova · Help Center vs Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🤖 Nova · Help Center vs Slack\n\n**What:** twice a day on weekdays (08:00 and 15:00 COL) reads the Slack channels where product/ops changes are announced, extracts every change that affects what we tell workers or companies, and checks it against the Help Center (es-419 + en-us). It also checks whether Aura's own copy of the Help Center (source *Aura KB (Zendesk chunks)*) is older than the article in Zendesk.\n\n**Output:** a review message in Slack for Mike (contradictions, outdated Aura copies, changes with no article), with the owner (B2C → Camila Ramírez, B2B → Carolina Silva) and a log row per finding in Google Sheets. Nothing is sent to Product Marketing automatically and nothing is changed in Zendesk or Aura.\n\nStarts inactive.",
+        "height": 380,
+        "width": 580,
+        "color": 4
+      },
+      "id": "e89770c8-2356-4c08-bf3e-30591368a790",
+      "name": "Note · Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -520
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🔑 Configure\n1. **Slack:** the bot of the Slack credential must be a member of every channel in *Config → channels* (private ones need an /invite). Scopes: channels:history, groups:history.\n2. **Zendesk:** credential *Zendesk account* in the three Zendesk nodes.\n3. **Ada:** select the Header Auth credential (Name `Authorization`, Value `Bearer <key>`) in *Get Aura Chunks*. The key needs Knowledge API access; if not, that node fails softly and the report says so.\n4. **Settings → Timezone** = America/Bogota; **Error workflow** = this workflow.\n5. Manual runs use the last `default_lookback_hours`. The window and the de-duplication only persist in production runs.",
+        "height": 360,
+        "width": 580,
+        "color": 3
+      },
+      "id": "aab72fda-4d52-45fa-8e81-2a2391001fa7",
+      "name": "Note · Config",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8,15 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "ace4b50d-a723-4947-8e5d-4ac517b4286e",
+      "name": "Weekdays 08:00 & 15:00 COL",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        600,
+        -160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "6add5b1d-d870-4bae-9ef3-28b33955e45f",
+      "name": "Run Manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        600,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n \"channels\": [\n  {\n   \"id\": \"C0CEPEU2TL5\",\n   \"name\": \"temp-crypto-support (grupo cripto)\"\n  },\n  {\n   \"id\": \"C0C54FXHHCL\",\n   \"name\": \"war-room-sept2026\"\n  },\n  {\n   \"id\": \"C04QX4W3ZV2\",\n   \"name\": \"product-drop\"\n  },\n  {\n   \"id\": \"C0429QJ4ZJM\",\n   \"name\": \"support-squad\"\n  },\n  {\n   \"id\": \"C02GGDRPCJZ\",\n   \"name\": \"payments-cancelations\"\n  },\n  {\n   \"id\": \"C0BEV5BGX98\",\n   \"name\": \"warroom-at-risk\"\n  },\n  {\n   \"id\": \"C0BULM1E6N5\",\n   \"name\": \"card-ops\"\n  }\n ],\n \"slack_workspace\": \"ontopai\",\n \"review_channel\": \"C09SPJRDY6S\",\n \"default_lookback_hours\": 24,\n \"max_lookback_hours\": 96,\n \"zendesk_base\": \"https://getontop.zendesk.com\",\n \"locales\": [\n  \"es-419\",\n  \"en-us\"\n ],\n \"ada_base_url\": \"https://ontop-gen.ada.support\",\n \"aura_source_id\": \"6ae5fb7d294176940c8be10d\",\n \"max_changes\": 15,\n \"max_digest_chars\": 60000,\n \"owners\": {\n  \"B2C\": \"Camila Ram\\u00edrez\",\n  \"B2B\": \"Carolina Silva\"\n },\n \"dedupe_days\": 14\n}",
+        "options": {}
+      },
+      "id": "c2e3fecc-5fac-4ebb-ac50-629f8768ef41",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        820,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Window = since the last production run (max 96 h back) until now.\nconst cfg = $('Config').first().json;\nconst sd = $getWorkflowStaticData('global');\nconst now = Date.now();\nlet since = sd.lastRun ? Date.parse(sd.lastRun) : now - cfg.default_lookback_hours * 3600e3;\nsince = Math.max(since, now - cfg.max_lookback_hours * 3600e3);\nreturn cfg.channels.map(c => ({ json: { channel: c.id, channel_name: c.name, oldest: String(Math.floor(since / 1000)), since: new Date(since).toISOString(), until: new Date(now).toISOString() } }));"
+      },
+      "id": "9c880079-7bfd-405a-9b44-cf9c958bf7e6",
+      "name": "Compute Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://slack.com/api/conversations.history",
+        "options": {
+          "timeout": 60000
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel }}"
+            },
+            {
+              "name": "oldest",
+              "value": "={{ $json.oldest }}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        }
+      },
+      "id": "2b426ca2-d777-4e3a-8a7a-193aef320d0f",
+      "name": "Slack · Channel History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1260,
+        -60
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "slackApi": {
+          "id": "ItnY50uWIAimuIiE",
+          "name": "Aura Service Disruption Agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// One request per thread that has replies (parents inside the window).\nconst chans = $('Compute Window').all();\nconst out = [];\n$input.all().forEach((it, i) => {\n  const ch = chans[i] && chans[i].json;\n  for (const m of (it.json.messages || [])) if (m.reply_count > 0 && ch) out.push({ json: { channel: ch.channel, ts: m.thread_ts || m.ts } });\n});\nreturn out.slice(0, 80);"
+      },
+      "id": "5466f065-e554-40ec-9af1-8cfbef82b4ef",
+      "name": "Thread Requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1480,
+        -60
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "https://slack.com/api/conversations.replies",
+        "options": {
+          "timeout": 60000
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel || 'none' }}"
+            },
+            {
+              "name": "ts",
+              "value": "={{ $json.ts || '0' }}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        }
+      },
+      "id": "88094a49-b1fc-47d3-a2c3-ce86c7eb0a5c",
+      "name": "Slack · Thread Replies",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1700,
+        -60
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "slackApi": {
+          "id": "ItnY50uWIAimuIiE",
+          "name": "Aura Service Disruption Agent"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Joins channel messages + thread replies into one compact digest for Nova.\nconst cfg = $('Config').first().json;\nconst chans = $('Compute Window').all().map(i => i.json);\nconst hist = $('Slack · Channel History').all();\nconst reqs = $('Thread Requests').all().map(i => i.json);\nconst reps = $('Slack · Thread Replies').all();\nconst link = (ch, ts) => `https://${cfg.slack_workspace}.slack.com/archives/${ch}/p${String(ts).replace('.', '')}`;\nconst clean = (t) => String(t || '').replace(/<(https?:[^|>]+)\\|([^>]+)>/g, '$2').replace(/<(https?:[^>]+)>/g, '$1').replace(/\\s+/g, ' ').trim();\nconst keep = (m) => m && m.type === 'message' && !['channel_join', 'channel_leave', 'channel_topic', 'channel_purpose', 'bot_add'].includes(m.subtype) && clean(m.text).length >= 15;\n\nconst errors = [];\nconst blocks = [];\nlet total = 0;\nchans.forEach((ch, i) => {\n  const h = hist[i] ? hist[i].json : {};\n  if (h.ok === false || h.error) { errors.push(`${ch.channel_name}: ${h.error || (h.error && h.error.message) || 'error'}`); return; }\n  const threads = {};\n  reqs.forEach((r, k) => { if (r.channel === ch.channel && reps[k]) threads[r.ts] = (reps[k].json.messages || []).filter(m => m.ts !== r.ts && keep(m)); });\n  const msgs = (h.messages || []).filter(keep).sort((a, b) => a.ts - b.ts);\n  if (!msgs.length) return;\n  const lines = [`## #${ch.channel_name}`];\n  for (const m of msgs) {\n    total++;\n    lines.push(`- [${new Date(m.ts * 1000).toISOString().slice(0, 16)}] (${link(ch.channel, m.ts)}) ${clean(m.text).slice(0, 1500)}`);\n    for (const r of (threads[m.thread_ts || m.ts] || []).slice(0, 25)) { total++; lines.push(`    ↳ ${clean(r.text).slice(0, 800)}`); }\n  }\n  blocks.push(lines.join('\\n'));\n});\nlet digest = blocks.join('\\n\\n');\nconst cut = digest.length > cfg.max_digest_chars;\nif (cut) digest = digest.slice(-cfg.max_digest_chars);\nreturn [{ json: { digest, messages: total, channels_with_activity: blocks.length, slack_errors: errors, digest_cut: cut, since: chans[0] && chans[0].since, until: chans[0] && chans[0].until } }];"
+      },
+      "id": "7c58d8a7-d7d8-4357-93bf-2ab4d315eeec",
+      "name": "Build Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1a7400fa-c19e-4c2a-8a01-9daff19cbfc4",
+              "leftValue": "={{ $json.messages }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "40a13dcf-a8a9-4c7e-aad4-5ab00f2bb6cb",
+      "name": "Has Slack Activity?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2140,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Slack messages from {{ $json.since }} to {{ $json.until }} ({{ $json.messages }} messages):\n\n{{ $json.digest }}\n\nReturn ONLY the structured output.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are **Nova**, the knowledge-quality analyst for Ontop's CX team. Ontop is a payroll + global wallet fintech: **workers** (B2C: contractors who get paid and withdraw money, Ontop card, crypto, Personal account…) and **companies/clients** (B2B: pay their workers, invoices, funding, payment methods, onboarding/KYB).\n\nYou receive internal Slack messages from channels where product and operational changes are announced and discussed. Extract every **change or confirmed fact** that affects what the Help Center or the support AI (Aura) should tell workers or companies. Examples: a country/method becomes available or unavailable; a fee, limit, cut-off time or delivery time changes; a new feature, step, requirement or document; a process change (how to request X, who handles Y); a temporary incident with a customer-facing instruction; a deprecation.\n\nIgnore: individual tickets/cases, internal-only coordination, opinions, questions without an answer, things still being decided, jokes. If a later message corrects an earlier one, keep only the final version. If a change is explicitly temporary, say so.\n\nFor each change give:\n- `id`: c1, c2…\n- `statement`: one precise sentence in Spanish with the exact fact (countries, amounts, times, conditions).\n- `audience`: worker · company · both.\n- `area`: short label (e.g. \"Retiros cripto\", \"Tarjeta Ontop\", \"Pagos de empresa\").\n- `keywords_es` and `keywords_en`: 2–3 short Help Center search terms in each language — product words that would appear in the article title or body, not the whole change. E.g. es [\"retiros cripto\",\"retiros por país\"], en [\"crypto withdrawal\",\"withdrawals by country\"].\n- `source_link`: the Slack link of the message that states it (copy it exactly from the digest).\n- `confidence`: high (announced/confirmed by an owner) · medium (stated, not formally confirmed).\n- `temporary`: true/false.\n\nReturn at most the 15 most customer-relevant changes. If there are none, return an empty list. Never include personal data of customers.",
+          "maxIterations": 4
+        }
+      },
+      "id": "9263ed47-6423-4bd2-bbd0-03258affa1c5",
+      "name": "Nova · Extract Changes",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        2380,
+        -160
+      ],
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-sonnet-5"
+        },
+        "options": {
+          "maxTokensToSample": 6000
+        }
+      },
+      "id": "c8301317-bb85-4042-b931-7a423d290dd7",
+      "name": "Claude · Extract",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        2280,
+        60
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "fqAjOy5hTw5zKK8l",
+          "name": "Mike's Claude"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "7cbbd18f-7f36-41bf-90df-08712107b4ea",
+      "name": "Think · Extract",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        2420,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n \"type\": \"object\",\n \"properties\": {\n  \"changes\": {\n   \"type\": \"array\",\n   \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n     \"id\": {\n      \"type\": \"string\"\n     },\n     \"statement\": {\n      \"type\": \"string\"\n     },\n     \"audience\": {\n      \"type\": \"string\",\n      \"enum\": [\n       \"worker\",\n       \"company\",\n       \"both\"\n      ]\n     },\n     \"area\": {\n      \"type\": \"string\"\n     },\n     \"keywords_es\": {\n      \"type\": \"array\",\n      \"items\": {\n       \"type\": \"string\"\n      }\n     },\n     \"keywords_en\": {\n      \"type\": \"array\",\n      \"items\": {\n       \"type\": \"string\"\n      }\n     },\n     \"source_link\": {\n      \"type\": \"string\"\n     },\n     \"confidence\": {\n      \"type\": \"string\",\n      \"enum\": [\n       \"high\",\n       \"medium\"\n      ]\n     },\n     \"temporary\": {\n      \"type\": \"boolean\"\n     }\n    },\n    \"required\": [\n     \"id\",\n     \"statement\",\n     \"audience\",\n     \"area\",\n     \"keywords_es\",\n     \"keywords_en\",\n     \"source_link\",\n     \"confidence\",\n     \"temporary\"\n    ]\n   }\n  }\n },\n \"required\": [\n  \"changes\"\n ]\n}"
+      },
+      "id": "bf31f355-5f0b-415e-a5e3-65083c940073",
+      "name": "Changes Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        2560,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Help Center searches for each change: up to 3 keywords per language, in es-419 and en-us.\nconst cfg = $('Config').first().json;\nconst changes = (($json.output || {}).changes || []).slice(0, cfg.max_changes);\nconst uniq = (a) => [...new Set((a || []).map(k => String(k).trim()).filter(Boolean))].slice(0, 3);\nconst out = [];\nfor (const c of changes) {\n  const es = uniq(c.keywords_es), en = uniq(c.keywords_en);\n  for (const q of es) out.push({ json: { change_id: c.id, query: q, locale: 'es-419' } });\n  for (const q of en) out.push({ json: { change_id: c.id, query: q, locale: 'en-us' } });\n}\nreturn out.slice(0, 90);"
+      },
+      "id": "2afe03f3-309d-4772-ad59-06bf5a51200d",
+      "name": "Search Requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2740,
+        -160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.zendesk_base }}/api/v2/help_center/articles/search.json",
+        "options": {
+          "timeout": 60000
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.query || 'ontop' }}"
+            },
+            {
+              "name": "locale",
+              "value": "={{ $json.locale || 'es-419' }}"
+            },
+            {
+              "name": "per_page",
+              "value": "4"
+            }
+          ]
+        }
+      },
+      "id": "107add3b-6983-4b65-b496-7d509a42c5b4",
+      "name": "Zendesk · Search Help Center",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2960,
+        -160
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Zendesk account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Candidate articles per change, with the relevant passages (around the change's keywords) instead of full bodies.\nconst changes = (($('Nova · Extract Changes').first().json.output || {}).changes || []);\nconst reqs = $('Search Requests').all().map(i => i.json);\nconst res = $input.all().map(i => i.json);\nconst strip = (h) => String(h || '').replace(/<(br|\\/p|\\/li|\\/h\\d|\\/tr)[^>]*>/gi, '\\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/[ \\t]+/g, ' ').replace(/\\n\\s*\\n+/g, '\\n').trim();\nconst byChange = {};\nreqs.forEach((r, i) => {\n  if (!r.change_id) return;\n  for (const a of ((res[i] || {}).results || [])) {\n    const key = a.id + '|' + a.locale;\n    (byChange[r.change_id] ||= {})[key] ||= a;\n  }\n});\nconst passages = (text, terms) => {\n  const lower = text.toLowerCase(), spans = [];\n  for (const t of terms) {\n    let from = 0, n = 0, idx;\n    while ((idx = lower.indexOf(t, from)) !== -1 && n < 3) { spans.push([Math.max(0, idx - 500), Math.min(text.length, idx + 700)]); from = idx + t.length; n++; }\n  }\n  spans.sort((a, b) => a[0] - b[0]);\n  const merged = [];\n  for (const s of spans) { const l = merged[merged.length - 1]; if (l && s[0] <= l[1]) l[1] = Math.max(l[1], s[1]); else merged.push([...s]); }\n  const body = merged.map(([a, b]) => text.slice(a, b)).join('\\n[…]\\n');\n  return (text.slice(0, 600) + (body ? '\\n[…]\\n' + body : '')).slice(0, 5000);\n};\nconst out = changes.map(c => {\n  const terms = [...new Set([...(c.keywords_es || []), ...(c.keywords_en || []), ...String(c.statement).split(/[^\\p{L}\\p{N}]+/u).filter(w => w.length >= 5)])].map(t => t.toLowerCase()).slice(0, 20);\n  const arts = Object.values(byChange[c.id] || {}).slice(0, 6).map(a => {\n    const text = strip(a.body);\n    return { article_id: a.id, locale: a.locale, title: a.title, url: a.html_url, updated_at: a.updated_at, passages: passages(text, terms) };\n  });\n  return { ...c, articles: arts };\n});\nreturn [{ json: { changes: out } }];"
+      },
+      "id": "a26757e4-0190-4c6b-93db-426839633b11",
+      "name": "Collect Articles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3180,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4399bb1f-4ec1-4225-a8ab-bd05e658ddb1",
+              "leftValue": "={{ $json.changes.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "77ce9aeb-827d-422e-8fa2-b0711d66fb6c",
+      "name": "Has Changes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3400,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Changes from Slack and candidate Help Center articles:\n\n{{ JSON.stringify($json.changes, null, 1) }}\n\nReturn ONLY the structured output.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are **Nova**, the knowledge-quality analyst for Ontop's CX team. For each change announced internally in Slack you get the candidate Help Center articles (es-419 and en-us) with the relevant passages. Decide, article by article, whether the article is aligned with the change.\n\nStatuses:\n- `contradicts`: the article says something incompatible with the change (e.g. lists crypto as available for a country that no longer has it; an old fee or time).\n- `incomplete`: the article covers the topic but is missing the change (new requirement, new exception, new option) and a reader would be misled or lack something important.\n- `aligned`: consistent. Do not report aligned articles.\nAlso: if NO candidate article covers the topic at all and customers will ask about it, report one finding with status `no_article` (article fields empty).\n\nRules:\n- Only report what the passages show. If the passage doesn't contain the relevant section, don't guess — skip it.\n- Check BOTH languages: an article can be fixed in one locale and wrong in the other; report each locale separately.\n- Owner: workers → `B2C`, companies → `B2B`, both → the article's audience (worker articles B2C, company articles B2B).\n- `article_says`: short literal quote (≤ 25 words) from the passage that is wrong/missing. `change`: the fact from Slack. `suggested_fix`: the concrete edit in the article's language.\n- `severity`: high (money, availability, legal/compliance, wrong instruction) · medium · low (wording).\n- Spanish for `change` and `why`; keep `article_says` and `suggested_fix` in the article's language.",
+          "maxIterations": 4
+        }
+      },
+      "id": "385fef56-85b8-4ec6-baba-fd3b68bdbbd0",
+      "name": "Nova · Compare with Help Center",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        3640,
+        -260
+      ],
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-sonnet-5"
+        },
+        "options": {
+          "maxTokensToSample": 8000
+        }
+      },
+      "id": "a4acf5c3-ce49-47c6-a800-65b151c5df11",
+      "name": "Claude · Compare",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        3540,
+        -40
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "fqAjOy5hTw5zKK8l",
+          "name": "Mike's Claude"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "a8ea8ebc-e843-4682-b469-9ae9b4b214ea",
+      "name": "Think · Compare",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        3680,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n \"type\": \"object\",\n \"properties\": {\n  \"findings\": {\n   \"type\": \"array\",\n   \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n     \"change_id\": {\n      \"type\": \"string\"\n     },\n     \"status\": {\n      \"type\": \"string\",\n      \"enum\": [\n       \"contradicts\",\n       \"incomplete\",\n       \"no_article\"\n      ]\n     },\n     \"article_id\": {\n      \"type\": \"string\"\n     },\n     \"locale\": {\n      \"type\": \"string\"\n     },\n     \"article_title\": {\n      \"type\": \"string\"\n     },\n     \"article_url\": {\n      \"type\": \"string\"\n     },\n     \"article_says\": {\n      \"type\": \"string\"\n     },\n     \"change\": {\n      \"type\": \"string\"\n     },\n     \"why\": {\n      \"type\": \"string\"\n     },\n     \"suggested_fix\": {\n      \"type\": \"string\"\n     },\n     \"owner\": {\n      \"type\": \"string\",\n      \"enum\": [\n       \"B2C\",\n       \"B2B\"\n      ]\n     },\n     \"severity\": {\n      \"type\": \"string\",\n      \"enum\": [\n       \"high\",\n       \"medium\",\n       \"low\"\n      ]\n     }\n    },\n    \"required\": [\n     \"change_id\",\n     \"status\",\n     \"article_id\",\n     \"locale\",\n     \"article_title\",\n     \"article_url\",\n     \"article_says\",\n     \"change\",\n     \"why\",\n     \"suggested_fix\",\n     \"owner\",\n     \"severity\"\n    ]\n   }\n  }\n },\n \"required\": [\n  \"findings\"\n ]\n}"
+      },
+      "id": "b0f00cd7-b453-4aa5-8a04-2e76f51ddd6c",
+      "name": "Findings Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        3820,
+        -40
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "95de7a05-e419-46cd-9e70-30c70ae770bc",
+      "name": "Merge Point",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3900,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.ada_base_url }}/api/v2/knowledge/articles",
+        "options": {
+          "timeout": 60000,
+          "pagination": {
+            "pagination": {
+              "paginationMode": "responseContainsNextURL",
+              "nextURL": "={{ $response.body.meta.next_page_url }}",
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !($response.body.meta && $response.body.meta.next_page_url) }}",
+              "limitPagesFetched": true,
+              "maxRequests": 60
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "knowledge_source_id",
+              "value": "={{ $('Config').first().json.aura_source_id }}"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        }
+      },
+      "id": "961eefd9-59db-47c0-99e8-3adb36407c3a",
+      "name": "Get Aura Chunks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4120,
+        -480
+      ],
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.zendesk_base }}/api/v2/help_center/es-419/articles.json",
+        "options": {
+          "timeout": 60000
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sort_by",
+              "value": "updated_at"
+            },
+            {
+              "name": "sort_order",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        }
+      },
+      "id": "870b80d3-1fca-4cad-b88b-9aec9e328a3b",
+      "name": "Zendesk · Recent Articles es-419",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4340,
+        -480
+      ],
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Zendesk account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.zendesk_base }}/api/v2/help_center/en-us/articles.json",
+        "options": {
+          "timeout": 60000
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sort_by",
+              "value": "updated_at"
+            },
+            {
+              "name": "sort_order",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        }
+      },
+      "id": "6c184cd9-72df-425c-8945-37c04fb88ad8",
+      "name": "Zendesk · Recent Articles en-us",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4560,
+        -480
+      ],
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Zendesk account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Joins Help Center findings + Aura staleness, removes what was already reported, builds Slack text and sheet rows.\nconst cfg = $('Config').first().json;\nconst digest = $('Build Digest').first().json;\nconst sd = $getWorkflowStaticData('global');\nconst now = Date.now();\nconst ran = (n) => { try { return $(n).isExecuted; } catch (e) { return false; } };\n\nconst changes = ran('Nova · Extract Changes') ? (($('Nova · Extract Changes').first().json.output || {}).changes || []) : [];\nlet findings = ran('Nova · Compare with Help Center') ? (($('Nova · Compare with Help Center').first().json.output || {}).findings || []) : [];\nconst chById = Object.fromEntries(changes.map(c => [c.id, c]));\n\n// --- Aura copy older than the Help Center article (same article id + locale)\nconst auraPages = $('Get Aura Chunks').all().map(i => i.json);\nconst auraError = auraPages.some(p => p.error) || !auraPages.some(p => Array.isArray(p.data));\nconst aura = {};\nfor (const p of auraPages) for (const a of (p.data || [])) {\n  const md = a.metadata || {};\n  const id = String(md.source_article_id || ''), loc = String(md.source_locale || a.locale || '').toLowerCase();\n  if (!id || a.enabled === false) continue;\n  const t = Date.parse(a.external_updated || md.source_updated_at || 0) || 0;\n  const k = id + '|' + loc;\n  if (!aura[k] || t < aura[k].t) aura[k] = { t, title: md.source_title || a.name };\n}\nconst stale = [];\nfor (const loc of cfg.locales) {\n  const page = $('Zendesk · Recent Articles ' + loc).first();\n  for (const a of ((page && page.json.articles) || [])) {\n    const k = a.id + '|' + loc.toLowerCase();\n    if (!aura[k] || a.draft) continue;\n    const hc = Date.parse(a.edited_at || a.updated_at);\n    if (hc - aura[k].t > 6 * 3600e3) stale.push({ article_id: String(a.id), locale: loc, title: a.title, url: a.html_url, hc_updated: (a.edited_at || a.updated_at).slice(0, 10), aura_updated: new Date(aura[k].t).toISOString().slice(0, 10) });\n  }\n}\n\n// --- De-duplicate against previous runs (static data persists only on production runs)\nsd.seen = Object.fromEntries(Object.entries(sd.seen || {}).filter(([, t]) => now - t < cfg.dedupe_days * 86400e3));\nconst norm = (s) => String(s || '').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, ' ').trim().slice(0, 60);\nconst fKey = (f) => ['hc', f.status, f.article_id, f.locale, norm(f.change)].join('|');\nconst sKey = (s) => ['aura', s.article_id, s.locale, s.hc_updated].join('|');\nconst newFindings = findings.filter(f => !sd.seen[fKey(f)]);\nconst newStale = stale.filter(s => !sd.seen[sKey(s)]);\nnewFindings.forEach(f => sd.seen[fKey(f)] = now);\nnewStale.forEach(s => sd.seen[sKey(s)] = now);\nsd.lastRun = digest.until;\n\n// --- Slack text\nconst z = 'America/Bogota';\nconst fmt = (iso) => DateTime.fromISO(iso).setZone(z).setLocale('es').toFormat('d LLL HH:mm');\nconst sev = { high: '🔴', medium: '🟠', low: '🟡' };\nconst st = { contradicts: 'contradice', incomplete: 'incompleto', no_article: 'sin artículo' };\nconst lines = [`*Nova · Help Center vs Slack* · ${fmt(digest.since)} – ${fmt(digest.until)}`,\n  `${digest.messages} mensajes en ${digest.channels_with_activity} canales · ${changes.length} cambios detectados · ${newFindings.length} diferencias nuevas en el Help Center · ${newStale.length} artículos con copia vieja en Aura`];\nconst sorted = newFindings.slice().sort((a, b) => ['high', 'medium', 'low'].indexOf(a.severity) - ['high', 'medium', 'low'].indexOf(b.severity));\nfor (const owner of ['B2C', 'B2B']) {\n  const fs = sorted.filter(f => f.owner === owner);\n  if (!fs.length) continue;\n  lines.push(`\\n*${owner} · ${cfg.owners[owner]}*`);\n  for (const f of fs.slice(0, 10)) {\n    const src = chById[f.change_id] && chById[f.change_id].source_link;\n    const art = f.status === 'no_article' ? '_No hay artículo que lo cubra_' : `<${f.article_url}|${f.article_title}> (${f.locale})`;\n    lines.push(`${sev[f.severity] || '•'} ${art} · *${st[f.status]}*\\n   Slack${src ? ` (<${src}|mensaje>)` : ''}: ${f.change}` +\n      (f.article_says ? `\\n   Artículo: “${f.article_says}”` : '') + `\\n   Ajuste: ${f.suggested_fix}`);\n  }\n  if (fs.length > 10) lines.push(`_…y ${fs.length - 10} más en la hoja._`);\n}\nif (newStale.length) {\n  lines.push(`\\n*Aura tiene una copia más vieja que el Help Center* (recargar chunks de la fuente Aura KB)`);\n  newStale.slice(0, 12).forEach(s => lines.push(`• <${s.url}|${s.title}> (${s.locale}) · Help Center ${s.hc_updated} · Aura ${s.aura_updated}`));\n  if (newStale.length > 12) lines.push(`_…y ${newStale.length - 12} más en la hoja._`);\n}\nif (!newFindings.length && !newStale.length) lines.push('\\nSin diferencias nuevas. ✅');\nconst notes = [];\nif (digest.slack_errors.length) notes.push('no pude leer: ' + digest.slack_errors.join(', '));\nif (digest.digest_cut) notes.push('había demasiados mensajes y solo se revisaron los más recientes');\nif (auraError) notes.push('no pude leer el knowledge de Aura (revisa la credencial de Ada en Get Aura Chunks)');\nif (notes.length) lines.push(`\\n_Nota: ${notes.join('; ')}._`);\nlines.push('\\n_Revisa y reenvía a Product Marketing lo que aplique. Nova no cambia nada en Zendesk ni en Aura._');\n\nconst runAt = digest.until;\nconst rows = newFindings.map(f => ({ run_at: runAt, type: 'help_center', status: f.status, severity: f.severity, owner: f.owner, owner_name: cfg.owners[f.owner],\n  article_id: f.article_id, locale: f.locale, article_title: f.article_title, article_url: f.article_url, change: f.change, article_says: f.article_says,\n  suggested_fix: f.suggested_fix, why: f.why, slack_source: (chById[f.change_id] || {}).source_link || '', hc_updated: '', aura_updated: '', follow_up: 'pendiente' }))\n  .concat(newStale.map(s => ({ run_at: runAt, type: 'aura_stale', status: 'aura_outdated', severity: 'medium', owner: 'CX', owner_name: 'Mike',\n  article_id: s.article_id, locale: s.locale, article_title: s.title, article_url: s.url, change: '', article_says: '', suggested_fix: 'Recargar los chunks de este artículo en Aura KB (Zendesk chunks)',\n  why: 'El artículo se editó en Zendesk después de la última carga en Aura', slack_source: '', hc_updated: s.hc_updated, aura_updated: s.aura_updated, follow_up: 'pendiente' })));\nreturn [{ json: { channel: cfg.review_channel, text: lines.join('\\n'), rows } }];"
+      },
+      "id": "490766bc-8fc8-4785-a556-03a260723012",
+      "name": "Build Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4780,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.channel }}"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "unfurl_links": false,
+          "unfurl_media": false
+        }
+      },
+      "id": "3927a7ab-71e6-4a13-aea7-c1209ae9208d",
+      "name": "Post Review to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        5000,
+        -560
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "ItnY50uWIAimuIiE",
+          "name": "Aura Service Disruption Agent"
+        }
+      },
+      "webhookId": "d38ad9c7-9f00-4231-8a3d-9aeafff266b6"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $json.rows.map(r => ({ json: r }));"
+      },
+      "id": "b3607f8f-3c6c-4b96-94d4-f9b5f8f21b35",
+      "name": "Rows for Sheet",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5000,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1aLBW9WHEI9ioZtFRcC9og3B2IeHYUk1iOhQfQIQTkpo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Hallazgos"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "4549e0b6-d7c9-4d33-ba85-26f3aa8c214b",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        5220,
+        -380
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "yOY66jkPN4WkAUzQ",
+          "name": "Mike Google Sheets"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "id": "3669df83-f612-4759-a250-f3e811fc6de4",
+      "name": "On Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        600,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C09SPJRDY6S"
+        },
+        "text": "=⚠️ Nova · Help Center vs Slack failed: {{ $json.execution.error.message }}\nNode: {{ $json.execution.lastNodeExecuted }} · {{ $json.execution.url }}",
+        "otherOptions": {}
+      },
+      "id": "94f07c55-8070-4a29-ab56-12af45d59bcd",
+      "name": "Send Error Alert to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        820,
+        260
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "ItnY50uWIAimuIiE",
+          "name": "Aura Service Disruption Agent"
+        }
+      },
+      "webhookId": "37b42abb-52f0-4700-8ba9-61ec720d33b7"
+    }
+  ],
+  "connections": {
+    "Weekdays 08:00 & 15:00 COL": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Manually": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Compute Window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Window": {
+      "main": [
+        [
+          {
+            "node": "Slack · Channel History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack · Channel History": {
+      "main": [
+        [
+          {
+            "node": "Thread Requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Thread Requests": {
+      "main": [
+        [
+          {
+            "node": "Slack · Thread Replies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack · Thread Replies": {
+      "main": [
+        [
+          {
+            "node": "Build Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Digest": {
+      "main": [
+        [
+          {
+            "node": "Has Slack Activity?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Slack Activity?": {
+      "main": [
+        [
+          {
+            "node": "Nova · Extract Changes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Point",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude · Extract": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Nova · Extract Changes",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think · Extract": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova · Extract Changes",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Changes Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Nova · Extract Changes",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nova · Extract Changes": {
+      "main": [
+        [
+          {
+            "node": "Search Requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Requests": {
+      "main": [
+        [
+          {
+            "node": "Zendesk · Search Help Center",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zendesk · Search Help Center": {
+      "main": [
+        [
+          {
+            "node": "Collect Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Articles": {
+      "main": [
+        [
+          {
+            "node": "Has Changes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Changes?": {
+      "main": [
+        [
+          {
+            "node": "Nova · Compare with Help Center",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Point",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude · Compare": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Nova · Compare with Help Center",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think · Compare": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova · Compare with Help Center",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Findings Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Nova · Compare with Help Center",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nova · Compare with Help Center": {
+      "main": [
+        [
+          {
+            "node": "Merge Point",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Point": {
+      "main": [
+        [
+          {
+            "node": "Get Aura Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Aura Chunks": {
+      "main": [
+        [
+          {
+            "node": "Zendesk · Recent Articles es-419",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zendesk · Recent Articles es-419": {
+      "main": [
+        [
+          {
+            "node": "Zendesk · Recent Articles en-us",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zendesk · Recent Articles en-us": {
+      "main": [
+        [
+          {
+            "node": "Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report": {
+      "main": [
+        [
+          {
+            "node": "Post Review to Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Rows for Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rows for Sheet": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Send Error Alert to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "saveManualExecutions": true
+  },
+  "pinData": {}
+}
