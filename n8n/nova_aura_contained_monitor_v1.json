@@ -8,7 +8,7 @@
         "width": 560,
         "color": 4
       },
-      "id": "b637b457-d1dc-43d5-a215-89198147e025",
+      "id": "b8564a1d-eaec-4a5a-8b71-61ab1549d9b0",
       "name": "Note · Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -24,7 +24,7 @@
         "width": 560,
         "color": 3
       },
-      "id": "07f0c793-2f7c-4de4-be90-916bd86b48fd",
+      "id": "d95c2818-9190-42a3-a01d-8a5d5e3b8c32",
       "name": "Note · Config",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -44,7 +44,7 @@
           ]
         }
       },
-      "id": "c359d149-5757-4ea2-9d83-d6cbb8d37a92",
+      "id": "72f57a44-1bfc-4458-87aa-ee5baf4c3fe0",
       "name": "Twice a Day (12:00 & 18:00 COL)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -55,7 +55,7 @@
     },
     {
       "parameters": {},
-      "id": "a753b89c-8f98-431c-8ad9-b188d9d75902",
+      "id": "26505a60-f85c-41aa-af14-99da85c452e4",
       "name": "Run Manually",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
@@ -70,7 +70,7 @@
         "jsonOutput": "{\n \"ada_base_url\": \"https://ontop-gen.ada.support\",\n \"slack_channel\": \"C09SPJRDY6S\",\n \"default_window_hours\": 12,\n \"lag_minutes\": 30,\n \"batch_size\": 20,\n \"max_conversations\": 300,\n \"max_chars_per_conversation\": 3500,\n \"max_risk_cases_in_slack\": 8\n}",
         "options": {}
       },
-      "id": "fcab1f99-c7b2-4e4f-a6a2-7d334b3713ae",
+      "id": "70860e5f-c02c-42c2-bb7a-679abb6620d0",
       "name": "Config",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -83,7 +83,7 @@
       "parameters": {
         "jsCode": "// Window = from the end of the last successful production run until now - lag.\n// Static data is only persisted on production (active) executions; manual runs use the default window.\nconst cfg = $('Config').first().json;\nconst sd = $getWorkflowStaticData('global');\nconst now = new Date();\nconst until = new Date(now.getTime() - cfg.lag_minutes * 60000);\nlet since = sd.lastUntil ? new Date(sd.lastUntil) : new Date(until.getTime() - cfg.default_window_hours * 3600000);\nconst maxSpan = 7 * 24 * 3600000; // Ada export allows max 7 days per request\nif (until - since > maxSpan) since = new Date(until.getTime() - maxSpan);\nconst iso = d => d.toISOString().replace(/\\.\\d{3}Z$/, 'Z');\nreturn [{ json: { since: iso(since), until: iso(until), messages_until: iso(now), base: cfg.ada_base_url.replace(/\\/$/, '') } }];"
       },
-      "id": "b32025e0-16aa-4a4b-83d3-f8632414ab8c",
+      "id": "32171566-73d8-4974-801a-b5c0d64bdffc",
       "name": "Compute Window",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -94,7 +94,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.base }}/api/v2/export/conversations",
+        "url": "={{ $('Compute Window').first().json.base }}/api/v2/export/conversations",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -124,7 +124,7 @@
           "timeout": 120000
         }
       },
-      "id": "a10af310-6f79-4e00-8783-b056c6a9340e",
+      "id": "7342b93f-461a-44f9-b1f3-9abe0f085526",
       "name": "Get Ada Conversations",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -138,7 +138,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.base }}/api/v2/export/messages",
+        "url": "={{ $('Compute Window').first().json.base }}/api/v2/export/messages",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -168,7 +168,7 @@
           "timeout": 120000
         }
       },
-      "id": "174a1ee1-6687-49b8-bb0f-f77baacde802",
+      "id": "02eae01a-1ba5-470f-9425-545a6c4ae831",
       "name": "Get Ada Messages",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -185,7 +185,7 @@
       "parameters": {
         "jsCode": "// Keeps only conversations Aura handled alone (no handoff, no human agent message, not a test)\n// and builds compact transcripts, grouped in batches for Nova.\nconst cfg = $('Config').first().json;\nconst win = $('Compute Window').first().json;\nconst get = (o, path) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), o);\nconst pick = (o, ...paths) => { for (const p of paths) { const v = get(o, p); if (v !== undefined && v !== null && v !== '') return v; } return undefined; };\nconst rows = (node) => $(node).all().flatMap(i => Array.isArray(i.json.data) ? i.json.data : (Array.isArray(i.json) ? i.json : []));\n\nconst convs = rows('Get Ada Conversations');\nconst msgs = rows('Get Ada Messages');\n\nconst byConv = {};\nfor (const m of msgs) {\n  const cid = pick(m, 'conversation_id', 'conversationId', 'conversation._id');\n  if (cid) (byConv[cid] ||= []).push(m);\n}\nconst textOf = (m) => {\n  const d = pick(m, 'message_data', 'messageData') || {};\n  let t = pick(d, 'text', 'body', 'title', 'description', 'label') ?? pick(m, 'text', 'body') ?? '';\n  if (typeof t !== 'string') t = JSON.stringify(t);\n  return t.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n};\nconst roleOf = (m) => {\n  const s = String(pick(m, 'sender', 'author.role', 'role', 'source') || '').toLowerCase();\n  if (/chatter|end.?user|customer|user/.test(s)) return 'USER';\n  if (/agent|human|liveagent/.test(s)) return 'AGENT';\n  return 'AURA';\n};\nconst ts = (m) => new Date(pick(m, 'date_created', 'created_at', 'date') || 0).getTime();\n\nconst stats = { total: convs.length, escalated: 0, test: 0, no_messages: 0, no_user_message: 0, contained: 0, truncated: 0 };\nconst out = [];\nfor (const c of convs) {\n  const id = pick(c, '_id', 'id', 'conversation_id');\n  if (!id) continue;\n  if (pick(c, 'is_test', 'test') === true) { stats.test++; continue; }\n  const ms = (byConv[id] || []).sort((a, b) => ts(a) - ts(b));\n  const escalated = pick(c, 'is_escalated', 'escalated', 'handoff', 'is_handed_off') === true || ms.some(m => roleOf(m) === 'AGENT');\n  if (escalated) { stats.escalated++; continue; }\n  if (!ms.length) { stats.no_messages++; continue; }\n  if (!ms.some(m => roleOf(m) === 'USER' && textOf(m))) { stats.no_user_message++; continue; }\n  stats.contained++;\n  let t = ms.map(m => [roleOf(m), textOf(m)]).filter(([, x]) => x).map(([r, x]) => r + ': ' + x).join('\\n');\n  const max = cfg.max_chars_per_conversation;\n  if (t.length > max) t = t.slice(0, Math.floor(max * 0.4)) + '\\n[…]\\n' + t.slice(-Math.floor(max * 0.6));\n  const csat = pick(c, 'csat.score', 'csat.rating', 'csat_score');\n  out.push({ id, csat: (typeof csat === 'number' || typeof csat === 'string') ? csat : null, transcript: t });\n}\nif (out.length > cfg.max_conversations) { stats.truncated = out.length - cfg.max_conversations; out.length = cfg.max_conversations; }\n\nconst batches = [];\nfor (let i = 0; i < out.length; i += cfg.batch_size) batches.push(out.slice(i, i + cfg.batch_size));\nreturn batches.map((b, k) => ({ json: { batch_no: k + 1, n_batches: batches.length, stats, window: win, conversations: b } }));"
       },
-      "id": "7d5c2994-87ac-482a-9583-a793c0eb8a25",
+      "id": "0fd2dcc4-1994-4f08-9b34-9a2d36866c8e",
       "name": "Build Batches",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -198,7 +198,7 @@
       "parameters": {
         "options": {}
       },
-      "id": "0b9bbbd4-8b6d-4768-8004-d10513f1b004",
+      "id": "e5ca57c0-4cc0-44d3-987e-f32b3522ee7c",
       "name": "Loop Over Batches",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
@@ -217,7 +217,7 @@
           "maxIterations": 5
         }
       },
-      "id": "45ef7e35-a570-4561-8586-0959e0af817c",
+      "id": "b9e3c125-a57b-4946-9178-db185ad2f821",
       "name": "Nova · Classify Conversations",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.7,
@@ -240,7 +240,7 @@
           "maxTokensToSample": 12000
         }
       },
-      "id": "0dd7baed-1763-4aa7-aa9d-a98b065f5779",
+      "id": "58ecbb32-489a-4436-b759-11a4086a6dac",
       "name": "Claude · Classifier",
       "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
       "typeVersion": 1.3,
@@ -257,7 +257,7 @@
     },
     {
       "parameters": {},
-      "id": "7c062311-837c-4fc1-9787-886ad573a230",
+      "id": "3df3bb44-d6db-4c2b-a1ea-57afdb2c0856",
       "name": "Think · Classifier",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
@@ -271,7 +271,7 @@
         "schemaType": "manual",
         "inputSchema": "{\n \"type\": \"object\",\n \"properties\": {\n  \"items\": {\n   \"type\": \"array\",\n   \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n     \"id\": {\n      \"type\": \"string\"\n     },\n     \"language\": {\n      \"type\": \"string\"\n     },\n     \"topic\": {\n      \"type\": \"string\"\n     },\n     \"sentiment\": {\n      \"type\": \"string\",\n      \"enum\": [\n       \"positive\",\n       \"neutral\",\n       \"negative\",\n       \"frustrated\"\n      ]\n     },\n     \"outcome\": {\n      \"type\": \"string\",\n      \"enum\": [\n       \"resolved\",\n       \"user_did_not_continue\",\n       \"open_problem\",\n       \"explicit_complaint\",\n       \"asked_for_human\",\n       \"no_real_ask\"\n      ]\n     },\n     \"open_problem_cause\": {\n      \"type\": \"string\",\n      \"enum\": [\n       \"product_limit\",\n       \"aura_missing_data\",\n       \"aura_misunderstood\",\n       \"should_have_escalated\",\n       \"product_bug\",\n       \"none\"\n      ]\n     },\n     \"complaint_type\": {\n      \"type\": \"string\",\n      \"enum\": [\n       \"product_delay\",\n       \"product_unavailable\",\n       \"product_bug\",\n       \"support_aura\",\n       \"support_team\",\n       \"none\"\n      ]\n     },\n     \"risk\": {\n      \"type\": \"string\",\n      \"enum\": [\n       \"none\",\n       \"money_missing\",\n       \"fraud\",\n       \"legal_threat\",\n       \"churn\",\n       \"account_blocked\"\n      ]\n     },\n     \"risk_detail\": {\n      \"type\": \"string\"\n     },\n     \"quote\": {\n      \"type\": \"string\"\n     },\n     \"aura_issue\": {\n      \"type\": \"string\"\n     }\n    },\n    \"required\": [\n     \"id\",\n     \"topic\",\n     \"sentiment\",\n     \"outcome\",\n     \"open_problem_cause\",\n     \"complaint_type\",\n     \"risk\"\n    ]\n   }\n  }\n },\n \"required\": [\n  \"items\"\n ]\n}"
       },
-      "id": "3f2f1313-9c99-4393-993b-998cba89cf9f",
+      "id": "54706469-205a-4956-b88f-cac906b4a918",
       "name": "Classification Schema",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.2,
@@ -285,7 +285,7 @@
         "mode": "runOnceForEachItem",
         "jsCode": "// Pass the classified items back to the loop; if Nova failed on this batch, count it instead of losing the run.\nconst batch = $('Loop Over Batches').item.json;\nconst items = $json.output && Array.isArray($json.output.items) ? $json.output.items : null;\nif (!items) return { json: { batch_no: batch.batch_no, failed: true, n: batch.conversations.length, error: String($json.error || 'no structured output').slice(0, 300) } };\nconst known = new Set(batch.conversations.map(c => c.id));\nreturn { json: { batch_no: batch.batch_no, failed: false, items: items.filter(i => known.has(i.id)), csat: Object.fromEntries(batch.conversations.filter(c => c.csat != null).map(c => [c.id, c.csat])) } };"
       },
-      "id": "b6ec325f-30e6-40fa-a745-9a5a682f4aa4",
+      "id": "7a4e1f53-ca2c-44fb-81ac-0133948fbbf0",
       "name": "Collect Batch Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -298,7 +298,7 @@
       "parameters": {
         "jsCode": "// Aggregates all batches into the KPIs used by the Slack message, the insights agent and the sheet.\nconst cfg = $('Config').first().json;\nconst win = $('Compute Window').first().json;\nconst stats = $('Build Batches').first().json.stats;\nconst batches = $input.all().map(i => i.json);\nconst items = batches.flatMap(b => b.items || []);\nconst csat = Object.assign({}, ...batches.map(b => b.csat || {}));\nconst failedConvs = batches.filter(b => b.failed).reduce((a, b) => a + (b.n || 0), 0);\n\nconst real = items.filter(i => i.outcome !== 'no_real_ask');\nconst n = real.length;\nconst count = (arr, key) => arr.reduce((a, i) => { a[i[key]] = (a[i[key]] || 0) + 1; return a; }, {});\nconst pct = (x) => n ? Math.round((x / n) * 100) : 0;\nconst outcomes = count(real, 'outcome');\nconst sentiment = count(real, 'sentiment');\nconst notOk = real.filter(i => ['open_problem', 'explicit_complaint', 'asked_for_human'].includes(i.outcome));\nconst causes = count(notOk.filter(i => i.open_problem_cause !== 'none'), 'open_problem_cause');\nconst complaints = count(real.filter(i => i.outcome === 'explicit_complaint' && i.complaint_type !== 'none'), 'complaint_type');\nconst topics = Object.entries(count(notOk, 'topic')).sort((a, b) => b[1] - a[1]).slice(0, 8);\nconst link = (id) => `${win.base}/insights/conversations/${id}`;\nconst riskOrder = { fraud: 0, legal_threat: 1, money_missing: 2, account_blocked: 3, churn: 4 };\nconst risks = real.filter(i => i.risk && i.risk !== 'none')\n  .sort((a, b) => (riskOrder[a.risk] ?? 9) - (riskOrder[b.risk] ?? 9))\n  .map(i => ({ id: i.id, link: link(i.id), risk: i.risk, risk_detail: i.risk_detail || '', topic: i.topic, quote: i.quote || '' }));\nconst auraIssues = real.filter(i => i.aura_issue).map(i => ({ id: i.id, topic: i.topic, outcome: i.outcome, aura_issue: i.aura_issue, quote: i.quote || '' }));\n\nconst summary = {\n  window: { since: win.since, until: win.until },\n  totals: { conversations: stats.total, handed_off: stats.escalated, contained: stats.contained, real_ask: n,\n            no_real_ask: items.length - n + stats.no_user_message, failed_to_classify: failedConvs, not_analyzed_over_cap: stats.truncated },\n  outcomes, outcomes_pct: Object.fromEntries(Object.entries(outcomes).map(([k, v]) => [k, pct(v)])),\n  sentiment_pct: Object.fromEntries(Object.entries(sentiment).map(([k, v]) => [k, pct(v)])),\n  open_problem_causes: causes, complaint_types: complaints, top_problem_topics: topics,\n  risk_cases: risks.length, aura_issue_cases: auraIssues.length\n};\nconst prev = $getWorkflowStaticData('global').prevSummary || null;\nconst notable = notOk.concat(real.filter(i => i.aura_issue && !notOk.includes(i)))\n  .slice(0, 70).map(i => ({ topic: i.topic, outcome: i.outcome, cause: i.open_problem_cause, complaint: i.complaint_type, risk: i.risk, quote: i.quote, aura_issue: i.aura_issue }));\nconst rows = items.map(i => ({\n  run_until: win.until, conversation_id: i.id, link: link(i.id), language: i.language || '', topic: i.topic, sentiment: i.sentiment,\n  outcome: i.outcome, open_problem_cause: i.open_problem_cause, complaint_type: i.complaint_type, risk: i.risk,\n  risk_detail: i.risk_detail || '', quote: i.quote || '', aura_issue: i.aura_issue || '', csat: csat[i.id] ?? ''\n}));\nreturn [{ json: { summary, prev, notable, risks, rows } }];"
       },
-      "id": "6f00f141-fa45-49a8-b415-ac52e7d013a1",
+      "id": "10ee2bed-2b93-4fed-b201-cbbaca0784d2",
       "name": "Build Report Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -317,7 +317,7 @@
           "maxIterations": 4
         }
       },
-      "id": "049e7058-6e8a-4255-80a0-c87af9800ae3",
+      "id": "d9f7aca9-4e30-49ce-b929-1ae16b3efce2",
       "name": "Nova · Write Insights",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.7,
@@ -340,7 +340,7 @@
           "maxTokensToSample": 3000
         }
       },
-      "id": "79a00935-6520-45fd-bc17-4db0c0731b9e",
+      "id": "b1aad902-249a-4274-a997-c67ae8ba8996",
       "name": "Claude · Insights",
       "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
       "typeVersion": 1.3,
@@ -357,7 +357,7 @@
     },
     {
       "parameters": {},
-      "id": "005f5632-d662-451f-addd-890f2f4a77b0",
+      "id": "d602fdfc-8896-46a1-9730-a3c5c353a0c2",
       "name": "Think · Insights",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
@@ -371,7 +371,7 @@
         "schemaType": "manual",
         "inputSchema": "{\n \"type\": \"object\",\n \"properties\": {\n  \"resumen\": {\n   \"type\": \"string\"\n  },\n  \"hallazgos\": {\n   \"type\": \"array\",\n   \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n     \"titulo\": {\n      \"type\": \"string\"\n     },\n     \"detalle\": {\n      \"type\": \"string\"\n     },\n     \"impacto\": {\n      \"type\": \"string\",\n      \"enum\": [\n       \"alto\",\n       \"medio\",\n       \"bajo\"\n      ]\n     }\n    },\n    \"required\": [\n     \"titulo\",\n     \"detalle\",\n     \"impacto\"\n    ]\n   }\n  }\n },\n \"required\": [\n  \"resumen\",\n  \"hallazgos\"\n ]\n}"
       },
-      "id": "0d26b2cd-a76b-4814-99bd-bb0c2d4fa5d8",
+      "id": "ba782376-72cd-4814-a321-65fc1306ce4e",
       "name": "Insights Schema",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.2,
@@ -384,7 +384,7 @@
       "parameters": {
         "jsCode": "// Builds the Slack summary and advances the window (static data persists only on production runs).\nconst cfg = $('Config').first().json;\nconst { summary: s, prev, risks } = $('Build Report Data').first().json;\nconst ins = $json.output || null;\nconst z = 'America/Bogota';\nconst f = (iso, fmt) => DateTime.fromISO(iso).setZone(z).setLocale('es').toFormat(fmt);\nconst sameDay = f(s.window.since, 'yyyy-LL-dd') === f(s.window.until, 'yyyy-LL-dd');\nconst win = sameDay ? `${f(s.window.since, 'd LLL')}, ${f(s.window.since, 'HH:mm')}–${f(s.window.until, 'HH:mm')}`\n                    : `${f(s.window.since, 'd LLL HH:mm')} – ${f(s.window.until, 'd LLL HH:mm')}`;\nconst o = s.outcomes || {}, p = s.outcomes_pct || {};\nconst pad = (x, w) => String(x).padStart(w);\nconst row = (label, key) => `${label.padEnd(34)}${pad(o[key] || 0, 5)}${pad((p[key] || 0) + '%', 6)}`;\nconst delta = (key) => {\n  if (!prev || !prev.outcomes_pct) return '';\n  const d = (p[key] || 0) - (prev.outcomes_pct[key] || 0);\n  return d === 0 ? '=' : (d > 0 ? '+' : '−') + Math.abs(d) + ' pp';\n};\nconst L = { product_limit: 'límite del producto', aura_missing_data: 'Aura no tenía el dato', aura_misunderstood: 'Aura no entendió', should_have_escalated: 'debía escalar', product_bug: 'bug del producto',\n            product_delay: 'producto · demora', product_unavailable: 'producto · no disponible', support_aura: 'soporte · Aura', support_team: 'soporte · equipo',\n            positive: 'positivo', neutral: 'neutral', negative: 'negativo', frustrated: 'frustrado',\n            money_missing: 'dinero sin llegar', fraud: 'posible fraude', legal_threat: 'amenaza legal', churn: 'quiere irse/cerrar', account_blocked: 'cuenta bloqueada' };\nconst list = (obj) => Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${L[k] || k} ${v}`).join(' · ') || '—';\n\nconst lines = [];\nlines.push(`*🤖 Aura · conversaciones sin handoff* · ${win} (COL)`);\nlines.push(`_${s.totals.real_ask} con consulta real · ${s.totals.handed_off} pasaron a agente (no incluidas)_`);\nlines.push('```');\nlines.push(`${'Resultado'.padEnd(34)}${pad('Casos', 5)}${pad('%', 6)}`);\nlines.push(row('Resuelto con Aura', 'resolved'));\nlines.push(row('El usuario no continuó', 'user_did_not_continue'));\nlines.push(row('Problema abierto', 'open_problem'));\nlines.push(row('Queja explícita', 'explicit_complaint'));\nlines.push(row('Pidió un agente', 'asked_for_human'));\nlines.push('```');\nif (prev) lines.push(`*vs. revisión anterior:* resuelto ${delta('resolved')} · quejas ${delta('explicit_complaint')} · pidió agente ${delta('asked_for_human')}`);\nlines.push(`*Sentimiento:* ${Object.entries(s.sentiment_pct || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v}% ${L[k] || k}`).join(' · ')}`);\nlines.push(`*Quejas por tipo:* ${list(s.complaint_types)}`);\nlines.push(`*Por qué quedaron abiertos:* ${list(s.open_problem_causes)}`);\nif (ins) {\n  lines.push('');\n  lines.push(ins.resumen);\n  lines.push('');\n  lines.push('*🔧 Oportunidades de mejora*');\n  (ins.hallazgos || []).forEach((h, k) => lines.push(`${k + 1}. *${h.titulo}* (${h.impacto}): ${h.detalle}`));\n}\nif (risks.length) {\n  lines.push('');\n  lines.push(`*⚠️ Para revisar con el equipo (${risks.length})*`);\n  risks.slice(0, cfg.max_risk_cases_in_slack).forEach(r => lines.push(`• <${r.link}|${L[r.risk] || r.risk}> · ${r.topic}${r.risk_detail ? ' · ' + r.risk_detail : ''}`));\n  if (risks.length > cfg.max_risk_cases_in_slack) lines.push(`_…y ${risks.length - cfg.max_risk_cases_in_slack} más en la hoja._`);\n}\nconst notes = [];\nif (s.totals.failed_to_classify) notes.push(`${s.totals.failed_to_classify} conversaciones no se pudieron clasificar`);\nif (s.totals.not_analyzed_over_cap) notes.push(`${s.totals.not_analyzed_over_cap} quedaron fuera por el límite de ${cfg.max_conversations}`);\nif (!ins) notes.push('no se generaron los hallazgos (falló Nova · Write Insights)');\nif (notes.length) lines.push(`\\n_Nota: ${notes.join('; ')}._`);\n\nconst sd = $getWorkflowStaticData('global');\nsd.lastUntil = s.window.until;\nsd.prevSummary = { window: s.window, outcomes_pct: s.outcomes_pct, sentiment_pct: s.sentiment_pct, totals: s.totals };\nreturn [{ json: { channel: cfg.slack_channel, text: lines.join('\\n') } }];"
       },
-      "id": "ae16c7f1-6f25-478e-b31c-d57625360f0e",
+      "id": "643533bc-9e1f-4fc0-8a96-73ce70e0e40d",
       "name": "Build Slack Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -407,7 +407,7 @@
           "unfurl_media": false
         }
       },
-      "id": "7060ba3b-4298-4910-9450-2abc4823ec5b",
+      "id": "66811722-4d53-472f-9fb2-daff73680e19",
       "name": "Post to Slack",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.3,
@@ -421,13 +421,13 @@
           "name": "Aura Service Disruption Agent"
         }
       },
-      "webhookId": "f31c944d-c72d-4c0a-a587-c013265ac7c0"
+      "webhookId": "0acd2304-48ca-4636-ab93-7c2d10c98da2"
     },
     {
       "parameters": {
         "jsCode": "return $('Build Report Data').first().json.rows.map(r => ({ json: r }));"
       },
-      "id": "c03413c5-79f6-4f16-a40e-f694a9a43159",
+      "id": "a5d20423-4a9f-47c4-8ea4-abbbd4910702",
       "name": "Rows for Sheet",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -457,7 +457,7 @@
         },
         "options": {}
       },
-      "id": "2182efc9-865d-47a6-8101-cea7cc10ff97",
+      "id": "f17d87ba-e178-43f3-a05a-2abc4761bce9",
       "name": "Log to Google Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
@@ -475,7 +475,7 @@
     },
     {
       "parameters": {},
-      "id": "0fc95543-9e9d-4a2c-95cc-3dbea6ace9eb",
+      "id": "84a864ef-185e-4a12-853f-69a8524cd87f",
       "name": "On Workflow Error",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
@@ -495,7 +495,7 @@
         "text": "=⚠️ Nova · Aura monitor failed: {{ $json.execution.error.message }}\nNode: {{ $json.execution.lastNodeExecuted }} · {{ $json.execution.url }}",
         "otherOptions": {}
       },
-      "id": "780fdd46-acb6-4a98-ade3-5a2c90a9948d",
+      "id": "ed2c837c-0b83-4ed8-b43b-fe95492153b7",
       "name": "Send Error Alert to Slack",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.3,
@@ -509,7 +509,7 @@
           "name": "Aura Service Disruption Agent"
         }
       },
-      "webhookId": "b1499e65-394e-4b02-97fa-39dc7e68af3c"
+      "webhookId": "459de4a6-3c3f-4c4f-bf25-5ae4308df01c"
     }
   ],
   "connections": {
