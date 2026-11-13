@@ -1,0 +1,11 @@
+cod_contractor,pais,tipo_cuenta,new_has_card_physical,new_has_card_virtual,des_physical_card_status,new_des_physical_card_status,amt_card_balance,observacion
+CR001451,ECUADOR,Global Account,1,1,CANCELLED,ACTIVE,222.52,Las dos columnas de estado de la tarjeta física se contradicen
+CR011912,ARGENTINA,Payroll Account,1,1,CANCELLED,ACTIVE,-609.87,Las dos columnas se contradicen; saldo de tarjeta negativo
+CR015792,COSTA RICA,Global Account,0,1,ACTIVE,CANCELLED,-200.61,Las dos columnas se contradicen (al revés)
+CR018252,ARGENTINA,Payroll Account,0,1,CANCELLED,,185.47,Física cancelada; solo queda el flag de la virtual
+CR045762,ARGENTINA,Payroll Account,0,1,CANCELLED,,0.00,Física cancelada y saldo 0; solo queda el flag de la virtual
+CR050766,ARGENTINA,Payroll Account,1,1,CANCELLED,PENDING_ACTIVATION,31.24,Las dos columnas se contradicen
+CR056130,COLOMBIA,Global Account,0,1,CANCELLED,,1.00,Física cancelada; solo queda el flag de la virtual
+CR064518,COLOMBIA,Payroll Account,0,1,NOT_REQUESTED,CANCELLED,,Nunca pidió física; columna nueva dice CANCELLED; flag virtual en 1
+CR070511,PERU,Payroll Account,0,1,NOT_REQUESTED,CANCELLED,,Igual; saldo wallet 0
+CR079506,MEXICO,Global Account,0,1,NOT_REQUESTED,CANCELLED,,Igual; saldo wallet 0
