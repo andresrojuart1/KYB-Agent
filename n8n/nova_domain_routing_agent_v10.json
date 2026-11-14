@@ -2,7 +2,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 Nova · Domain routing agent v10 (every 5 min)\n\n**Goal:** every unassigned ticket in **Worker Support** and **Company Support** gets its real category (Zendesk directory) and its **domain owner** (CX Kickoff · Domains).\n\n**Trigger:** Schedule, every 5 minutes.\n\n**AI:** one *AI Agent* node (Claude) per ticket with tools: Zendesk conversation, requester's open tickets, category directory (Google Sheet), Onsight (MCP).\n\n**Writes:** category + assignee (+ Company Support group for clients) + 1 internal note. Never status, public replies or merges.\n\nStarts **inactive** – test with *Execute workflow* first.\n\n**v8:** reads the WhatsApp/chat *conversation log* (no more false low-context), requester search fixed, failed writes get tagged `nova_routing_failed` + Slack alert instead of retrying every 5 min.\n\n**v9:** urgent tickets → Slack **DM to the assigned owner** (not the channel). Fix: `nova_routing_failed` tag is now ADDED (POST) instead of replacing all ticket tags (PUT).\n**v9:** search limited to the Worker Support + Company Support queues (other groups and Ada sessions without group are ignored).\n\n**v10 (Nov 14):** domains = CX Kickoff (unchanged) except: certificates of services & statements → **Mike**; low-context → **Samuel**. Live Zendesk category list injected in the prompt; generic *Worker General Info* only for low-context. Same requester + SAME issue already assigned → same agent; different issue → normal domain routing. *Type of Request* is filled. Decision log ON → Hallazgos sheet, tab *Ruteo Nova* (includes urgent DM result). Pattern alert: ≥3 tickets same category flagged as possible tech/product issue in 3h → DM to owner + post in alerts channel.",
+        "content": "## 🤖 Nova · Domain routing agent v10 (every 5 min)\n\n**Goal:** every unassigned ticket in **Worker Support** and **Company Support** gets its real category (Zendesk directory) and its **domain owner** (CX Kickoff · Domains).\n\n**Trigger:** Schedule, every 5 minutes.\n\n**AI:** one *AI Agent* node (Claude) per ticket with tools: Zendesk conversation, requester's open tickets, category directory (Google Sheet), Onsight (MCP).\n\n**Writes:** category + assignee (+ Company Support group for clients) + 1 internal note. Never status, public replies or merges.\n\nStarts **inactive** – test with *Execute workflow* first.\n\n**v8:** reads the WhatsApp/chat *conversation log* (no more false low-context), requester search fixed, failed writes get tagged `nova_routing_failed` + Slack alert instead of retrying every 5 min.\n\n**v9:** urgent tickets → Slack **DM to the assigned owner** (not the channel). Fix: `nova_routing_failed` tag is now ADDED (POST) instead of replacing all ticket tags (PUT).\n**v9:** search limited to the Worker Support + Company Support queues (other groups and Ada sessions without group are ignored).\n\n**v10 (Nov 14):** domains = CX Kickoff (unchanged) except: certificates of services & statements → **Mike**; low-context → **Samuel**. Live Zendesk category list injected in the prompt; generic *Worker General Info* only for low-context. Same requester + SAME issue already assigned → same agent; different issue → normal domain routing. *Type of Request* is filled. Decision log ON → Hallazgos sheet, tab *Ruteo Nova* (includes urgent DM result). Pattern alert (v10.1, runs once at the end of each run, reads the log — no static data): ≥3 tickets same category flagged as possible tech/product issue in 3h → DM to owner + post in alerts channel.",
         "height": 330,
         "width": 520,
         "color": 4
@@ -812,7 +812,7 @@
         35260,
         6700
       ],
-      "id": "434c4cc1-bb42-4df2-92a1-91ab03cfdd73",
+      "id": "6ec3e2c9-6683-4d7d-a4df-f919e04b6ff3",
       "name": "Mark Write: Updated"
     },
     {
@@ -827,7 +827,7 @@
         34860,
         6560
       ],
-      "id": "264b6e45-77c0-4e99-907c-c530b5fb1255",
+      "id": "b3cb3e77-64bc-40b2-bc6e-eee4f2f49bb7",
       "name": "Mark Write: Fallback"
     },
     {
@@ -842,7 +842,7 @@
         35300,
         6160
       ],
-      "id": "8d32ea52-2f7a-4d10-8138-a22552ec66ce",
+      "id": "5a82ee70-fdf6-449e-a107-d08be1547e78",
       "name": "DM Result"
     },
     {
@@ -857,7 +857,7 @@
         35300,
         6340
       ],
-      "id": "319297ab-55b9-40ee-98bc-98f11911e302",
+      "id": "3ea4059b-c582-4f0d-954c-caa6609d2172",
       "name": "No DM"
     },
     {
@@ -872,13 +872,13 @@
         35620,
         7056
       ],
-      "id": "98c7d3fd-6fd1-42bb-af12-e383360c842f",
+      "id": "e1258f3d-e715-4979-a233-38e8e656c062",
       "name": "Mark Failed"
     },
     {
       "parameters": {
         "mode": "raw",
-        "jsonOutput": "={{ JSON.stringify({ timestamp: $now.setZone('America/Bogota').toFormat('yyyy-LL-dd HH:mm'), ticket_id: $('Build Zendesk Update').item.json.ticket_id, owner: $('Build Zendesk Update').item.json.owner, category: $('Build Zendesk Update').item.json.category_name, category_saved: $('Build Zendesk Update').item.json.category_saved, type_of_request: $('Build Zendesk Update').item.json.request_type, confidence: $('Build Zendesk Update').item.json.confidence, low_context: $('Build Zendesk Update').item.json.low_context, urgent: $('Build Zendesk Update').item.json.urgent, urgent_dm: $json.urgent_dm, same_issue_duplicate_of: $('Build Zendesk Update').item.json.same_issue_duplicate_of, assigned_by_duplicate: $('Build Zendesk Update').item.json.assigned_by_duplicate, write_result: $json.write_result, reason: $('Build Zendesk Update').item.json.reason }) }}",
+        "jsonOutput": "={{ JSON.stringify({ timestamp: $now.setZone('America/Bogota').toFormat('yyyy-LL-dd HH:mm'), ticket_id: $('Build Zendesk Update').item.json.ticket_id, owner: $('Build Zendesk Update').item.json.owner, category: $('Build Zendesk Update').item.json.category_name, category_saved: $('Build Zendesk Update').item.json.category_saved, type_of_request: $('Build Zendesk Update').item.json.request_type, confidence: $('Build Zendesk Update').item.json.confidence, low_context: $('Build Zendesk Update').item.json.low_context, urgent: $('Build Zendesk Update').item.json.urgent, urgent_dm: $json.urgent_dm, same_issue_duplicate_of: $('Build Zendesk Update').item.json.same_issue_duplicate_of, assigned_by_duplicate: $('Build Zendesk Update').item.json.assigned_by_duplicate, write_result: $json.write_result, reason: $('Build Zendesk Update').item.json.reason, category_tag: $('Build Zendesk Update').item.json.category_tag, possible_product_issue: $('Build Zendesk Update').item.json.possible_product_issue, issue_signature: $('Build Zendesk Update').item.json.issue_signature }) }}",
         "options": {}
       },
       "type": "n8n-nodes-base.set",
@@ -887,56 +887,52 @@
         35520,
         6352
       ],
-      "id": "cbcf9f93-52d6-4617-9e6a-cba74d8096f8",
+      "id": "68cd0b82-d602-493b-9598-22da3b6c9792",
       "name": "Build Log Row"
     },
     {
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "// Pattern detector: several tickets with the same category flagged as a possible product/tech issue\n// in a rolling 3h window → one alert per category (3h cooldown). State lives in workflow static data\n// (only persists in production runs of the active workflow, not in manual test executions).\nconst b = $('Build Zendesk Update').item.json;\nconst WINDOW_MS = 3 * 60 * 60 * 1000, THRESHOLD = 3, COOLDOWN_MS = 3 * 60 * 60 * 1000;\nconst sd = $getWorkflowStaticData('global');\nsd.clusters = sd.clusters || {}; sd.alerted = sd.alerted || {};\nconst now = Date.now();\nfor (const k of Object.keys(sd.clusters)) {\n  sd.clusters[k] = sd.clusters[k].filter(e => now - e.ts < WINDOW_MS);\n  if (!sd.clusters[k].length) delete sd.clusters[k];\n}\nfor (const k of Object.keys(sd.alerted)) if (now - sd.alerted[k] > COOLDOWN_MS) delete sd.alerted[k];\nlet alert = false, list = [];\nconst key = b.category_tag || 'unknown';\nif (b.possible_product_issue) {\n  const arr = sd.clusters[key] = sd.clusters[key] || [];\n  if (!arr.some(e => e.id === b.ticket_id)) arr.push({ id: b.ticket_id, ts: now, owner: b.owner, slack: b.owner_slack_id, sig: b.issue_signature });\n  if (arr.length >= THRESHOLD && !sd.alerted[key]) { alert = true; sd.alerted[key] = now; list = arr; }\n}\nconst owners = [...new Set(list.map(e => e.slack).filter(Boolean))];\nreturn { json: {\n  cluster_alert: alert,\n  cluster_category: b.category_name,\n  cluster_count: list.length,\n  cluster_tickets: list.map(e => '<https://getontop.zendesk.com/agent/tickets/' + e.id + '|#' + e.id + '> (' + e.owner + ')').join(', '),\n  cluster_signatures: [...new Set(list.map(e => e.sig).filter(Boolean))].join(' · '),\n  cluster_owner_mentions: owners.map(u => '<@' + u + '>').join(' '),\n  owner_slack_id: b.owner_slack_id,\n}};"
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1aLBW9WHEI9ioZtFRcC9og3B2IeHYUk1iOhQfQIQTkpo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "493705512"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        33560,
+        6160
+      ],
+      "id": "13965adc-336f-4b78-9c47-b142245b6bb1",
+      "name": "Read Routing Log",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "yOY66jkPN4WkAUzQ",
+          "name": "Mike Google Sheets"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Runs ONCE per execution, after all tickets of this run were routed and logged.\n// Stateless pattern detector (no workflow static data): reads the 'Ruteo Nova' log, counts tickets\n// flagged possible_product_issue per category in the last 3h, and alerts only when THIS run makes a\n// category cross the threshold (so the same cluster is not alerted every 5 minutes).\nconst WINDOW_MS = 3 * 60 * 60 * 1000, THRESHOLD = 3;\nconst SLACK = { Justin: 'U0CA6JRHVM3', Sudu: 'U03U61FQJKA', Jaime: 'U0CEQGZN7AB', Caro: 'U063KEHP2SD', Cristian: 'U0AU0TPJDM5', Brisa: 'U0AJMGBVCR5', Miguel: 'U06LW3ASH7D', Samuel: 'U099JCSKB3Q', Mike: 'U09NCCJJ2UT' };\nlet thisRun = new Set();\ntry { thisRun = new Set($('Filter & Prioritize').all().map(i => String(i.json.ticket_id))); } catch (e) {}\nconst now = Date.now();\nconst toMs = ts => { const d = new Date(String(ts).replace(' ', 'T') + ':00-05:00'); return isNaN(d) ? 0 : d.getTime(); };\nconst rows = $input.all().map(i => i.json)\n  .filter(r => String(r.possible_product_issue).toLowerCase() === 'true' && now - toMs(r.timestamp) < WINDOW_MS);\nconst byCat = {};\nfor (const r of rows) {\n  const k = r.category_tag || r.category || 'unknown';\n  (byCat[k] = byCat[k] || new Map()).set(String(r.ticket_id), r);\n}\nconst out = [];\nfor (const [k, m] of Object.entries(byCat)) {\n  const all = [...m.values()];\n  const before = all.filter(r => !thisRun.has(String(r.ticket_id)));\n  if (all.length >= THRESHOLD && before.length < THRESHOLD) {\n    const owners = [...new Set(all.map(r => r.owner).filter(Boolean))];\n    const last = all[all.length - 1];\n    out.push({ json: {\n      cluster_category: last.category || k,\n      cluster_count: all.length,\n      cluster_tickets: all.map(r => '<https://getontop.zendesk.com/agent/tickets/' + r.ticket_id + '|#' + r.ticket_id + '> (' + r.owner + ')').join(', '),\n      cluster_signatures: [...new Set(all.map(r => r.issue_signature).filter(Boolean))].join(' · '),\n      cluster_owner_mentions: owners.map(o => SLACK[o] ? '<@' + SLACK[o] + '>' : o).join(' '),\n      owner_slack_id: SLACK[last.owner] || '',\n    }});\n  }\n}\nreturn out;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        35960,
-        6352
+        33780,
+        6160
       ],
-      "id": "8c037e1b-73f1-4bf6-8928-11faf88ada3a",
+      "id": "0da44039-8976-46b5-9492-d26e29a890dc",
       "name": "Detect Issue Pattern"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "852131f4-d4e9-4102-b487-cd7c7bdd235a",
-              "leftValue": "={{ $json.cluster_alert }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "7dea8af9-0983-4e59-8bd7-adb1c9959186",
-      "name": "Pattern Alert?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        36180,
-        6352
-      ]
     },
     {
       "parameters": {
@@ -949,13 +945,13 @@
         "text": "=🔎 *Possible product/tech issue* — {{ $json.cluster_count }} tickets in the last 3h with the same pattern\nCategory: {{ $json.cluster_category }}\nWhat workers describe: {{ $json.cluster_signatures }}\nTickets: {{ $json.cluster_tickets }}\nSuggested next step: ask these workers for a screenshot or screen recording (device, app version, approximate time of the error), then escalate in one thread to Tech / Product with the ticket list. Reply to workers that it was escalated — no ETAs.",
         "otherOptions": {}
       },
-      "id": "032a20bb-1bb1-40f8-a72f-5f7c9b71a6df",
+      "id": "bc687a78-bc70-4d01-9a0d-bb7aa4f82e0c",
       "name": "DM Pattern Alert to Owner",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.3,
       "position": [
-        36400,
-        6260
+        34000,
+        6160
       ],
       "webhookId": "6d14c540-4001-4deb-91fd-11a338985e73",
       "credentials": {
@@ -977,13 +973,13 @@
         "text": "=🔎 {{ $('Detect Issue Pattern').item.json.cluster_owner_mentions }} *Possible product/tech issue* — {{ $('Detect Issue Pattern').item.json.cluster_count }} tickets in the last 3h with the same pattern\nCategory: {{ $('Detect Issue Pattern').item.json.cluster_category }}\nWhat workers describe: {{ $('Detect Issue Pattern').item.json.cluster_signatures }}\nTickets: {{ $('Detect Issue Pattern').item.json.cluster_tickets }}\nSuggested next step: ask these workers for a screenshot or screen recording (device, app version, approximate time of the error), then escalate in one thread to Tech / Product with the ticket list. Reply to workers that it was escalated — no ETAs.",
         "otherOptions": {}
       },
-      "id": "6cb287d6-cc88-4b95-b3da-2c1a13f17d04",
+      "id": "81d074c8-dddb-4640-85a5-36eb8f71b968",
       "name": "Post Pattern Alert to Channel",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.3,
       "position": [
-        36620,
-        6260
+        34220,
+        6160
       ],
       "webhookId": "c7b0f752-6cc1-4029-ba93-aff8830f4fcf",
       "credentials": {
@@ -1042,7 +1038,13 @@
     },
     "Loop Over Tickets": {
       "main": [
-        [],
+        [
+          {
+            "node": "Read Routing Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Nova Routing Agent",
@@ -1209,7 +1211,7 @@
       "main": [
         [
           {
-            "node": "Detect Issue Pattern",
+            "node": "Loop Over Tickets",
             "type": "main",
             "index": 0
           }
@@ -1377,29 +1379,22 @@
         ]
       ]
     },
-    "Detect Issue Pattern": {
+    "Read Routing Log": {
       "main": [
         [
           {
-            "node": "Pattern Alert?",
+            "node": "Detect Issue Pattern",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Pattern Alert?": {
+    "Detect Issue Pattern": {
       "main": [
         [
           {
             "node": "DM Pattern Alert to Owner",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Loop Over Tickets",
             "type": "main",
             "index": 0
           }
@@ -1416,17 +1411,6 @@
           }
         ]
       ]
-    },
-    "Post Pattern Alert to Channel": {
-      "main": [
-        [
-          {
-            "node": "Loop Over Tickets",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
     }
   },
   "pinData": {},
@@ -1434,5 +1418,5 @@
     "templateCredsSetupCompleted": true,
     "instanceId": "558d88703fb65b2d0e44613bc35916258b0f0bf983c5d4730c00c424b77ca36a"
   },
-  "name": "Nova · Domain routing agent v10"
+  "name": "Nova · Domain routing agent v10.1"
 }
