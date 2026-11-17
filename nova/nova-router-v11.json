@@ -1,9 +1,9 @@
 {
-  "name": "Nova · Domain routing agent v11",
+  "name": "Nova · Domain routing agent v11.1",
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 Nova · Domain routing agent v11 (every 5 min)\n\n**Goal:** every ticket in **Worker Support** and **Company Support** ends with its real category (Zendesk directory) and its **domain owner** (CX Kickoff · Domains). Generic categories (*Worker General Info*, *General questions*) never stay parked.\n\n**Trigger:** Schedule, every 5 minutes. **AI:** one *AI Agent* (Claude) per ticket. **Writes:** category + type of request + assignee (+ Company Support group for clients) + 1 internal note + routing tags. Never status, public replies or merges.\n\n**v8–v10:** conversation log, failed-write tag + Slack, urgent DM to owner, WS+CS only, live category list, same-issue duplicates → same agent, decision log, pattern alerts.\n\n**v11 (Nov 17):**\n• **Aura chat history** tool (audits → ChatStartedEvent.history): the pre-handoff conversation with Aura lives there, not in comments/conversation log. Low-context only if comments, conversation log AND chat history are empty.\n• **Low-context → Cristian** (general questions), clients → Miguel. **No more Samuel by default.**\n• **Generic-category sweep** (re-route mode): each run also picks up to 3 tickets ≥30 min old still in *Worker General Info* / *General questions*, unassigned / with Samuel / with an OOO agent, without `nova_reasignado` → re-reads them and reassigns to the real owner. Tag `nova_reasignado` (once). Keep a ticket with its owner: tag `nova_keep_owner`.\n• **OOO coverage:** owners with `agent_ooo=true` are covered (Sudu→Justin, Brisa→Cristian, …).\n• **Payflow retry:** if Zendesk rejects the update (*Payflow needed*), retry with Payflow = n/a before falling back to owner-only — so the category is not lost.\n• **Messaging channels:** internal note says how to reply. Public comments via Ticket API do NOT reach WhatsApp/chat customers → reply from Agent Workspace (or Sunshine API). WhatsApp 24h window closed → send template `reactivar_conversacion` (es/en) first; reply after the customer answers.",
+        "content": "## 🤖 Nova · Domain routing agent v11.1 (every 5 min)\n\n**Goal:** every ticket in **Worker Support** and **Company Support** ends with its real category (Zendesk directory) and its **domain owner** (CX Kickoff · Domains). Generic categories (*Worker General Info*, *General questions*) never stay parked.\n\n**Trigger:** Schedule, every 5 minutes. **AI:** one *AI Agent* (Claude) per ticket. **Writes:** category + type of request + assignee (+ Company Support group for clients) + 1 internal note + routing tags. Never status, public replies or merges.\n\n**v8–v10:** conversation log, failed-write tag + Slack, urgent DM to owner, WS+CS only, live category list, same-issue duplicates → same agent, decision log, pattern alerts.\n\n**v11 (Nov 17):**\n• **Aura chat history** tool (audits → ChatStartedEvent.history): the pre-handoff conversation with Aura lives there, not in comments/conversation log. Low-context only if comments, conversation log AND chat history are empty.\n• **Low-context → Cristian** (general questions), clients → Miguel. **No more Samuel by default.**\n• **Generic-category sweep** (re-route mode): each run also picks up to 3 tickets ≥30 min old still in *Worker General Info* / *General questions*, unassigned / with Samuel / with an OOO agent, without `nova_reasignado` → re-reads them and reassigns to the real owner. Tag `nova_reasignado` (once). Keep a ticket with its owner: tag `nova_keep_owner`.\n• **OOO coverage:** owners with `agent_ooo=true` are covered (Sudu→Justin, Brisa→Cristian, …).\n• **Payflow retry:** if Zendesk rejects the update (*Payflow needed*), retry with Payflow = n/a before falling back to owner-only — so the category is not lost.\n• **v11.1:** smaller search pages (50 new / 25 sweep) so *Filter & Prioritize* doesn't stall on large payloads.\n• **Messaging channels:** internal note says how to reply. Public comments via Ticket API do NOT reach WhatsApp/chat customers → reply from Agent Workspace (or Sunshine API). WhatsApp 24h window closed → send template `reactivar_conversacion` (es/en) first; reply after the customer answers.",
         "height": 520,
         "width": 560,
         "color": 4
@@ -180,7 +180,7 @@
             },
             {
               "name": "per_page",
-              "value": "100"
+              "value": "50"
             }
           ]
         }
@@ -226,7 +226,7 @@
             },
             {
               "name": "per_page",
-              "value": "100"
+              "value": "50"
             }
           ]
         }
@@ -272,7 +272,7 @@
             },
             {
               "name": "per_page",
-              "value": "100"
+              "value": "25"
             }
           ]
         }
@@ -319,7 +319,7 @@
             },
             {
               "name": "per_page",
-              "value": "100"
+              "value": "25"
             }
           ]
         }
