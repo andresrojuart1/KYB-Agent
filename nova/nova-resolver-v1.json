@@ -429,6 +429,7 @@
     },
     {
       "parameters": {
+        "name": "search_aura_knowledge",
         "description": "Search Aura's official knowledge base (Ada articles, ~1,000, es + en, workers and clients). Input: a short keyword query in the customer's language (e.g. 'transferencia rechazada devolución', 'paycheck advance pending balance', 'reset password'). Returns the top 5 articles with title, URL, audience and the first 1,800 characters. Call it 1-3 times with different keywords; base the draft only on what it returns.",
         "workflowId": {
           "__rl": true,
