@@ -1,0 +1,1245 @@
+{
+  "name": "Nova · Resolver agent v1 (drafts + Payouts side conversations)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🤖 Nova Resolver v1 (every 15 min)\n\n**Goal:** for tickets that already have an owner and are waiting on us (status *open*), do the homework the agent would do: read the whole conversation, check **Onsight** + **Aura's knowledge (Ada)**, and leave an internal note with the diagnosis, whether it can be answered now, and a **draft reply**.\n\n**Scope by domain (agreed with Mike, Nov 17):**\n• **Justin / Sudu – Payouts (transfers):** Nova may **create the side conversation to the Payouts team** by itself — only when Onsight confirms the transfer (transaction ID, amount, date, status), no side conversation is already open, the customer gave what's needed and confidence is high.\n• **Carolina – Ontop Card / Reserve / Concierge:** side conversation only **suggested** in the note (ready to copy). Not created.\n• **Everyone else (Jaime, Cristian, Brisa, Miguel, Samuel, Mike):** draft only.\n\n**Never:** public replies, status changes, merges, assignee/category changes, the *Misclassified Ticket* field. One pass per ticket; it is reviewed again only if there is new activity and ≥4 h passed (tag `nova_res_<yyyymmddhhmm>`). Opt-out per ticket: tag `nova_resolver_skip`.",
+        "height": 520,
+        "width": 620,
+        "color": 4
+      },
+      "id": "86c14c21-28df-570d-8be4-05cd2552f0c3",
+      "name": "Note · Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🔑 Configure before running\n1. **Zendesk API** (`zendeskApi`) – same as Nova Router.\n2. **Anthropic** – same key (claude-sonnet-5).\n3. **Ada Knowledge API** – new *Header Auth* credential: name `Authorization`, value `Bearer <Ada API key>` (Ada → Settings → Platform → APIs). Select it in **Fetch Ada Knowledge**.\n4. **Onsight MCP** – same bearer as Nova Router.\n5. **Google Sheets** – log tab *Resolver Nova* in the Hallazgos sheet.\n6. **Save the workflow before the first run**: *Search Aura Knowledge* calls this same workflow (`$workflow.id`) through *When Called as KB Tool*.",
+        "height": 360,
+        "width": 520,
+        "color": 3
+      },
+      "id": "c116ae2b-8e4f-55bc-80e0-faff2dfa896e",
+      "name": "Note · Credentials",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        560,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### KB tool (sub-flow)\n*Search Aura Knowledge* → calls this same workflow → downloads the enabled Ada articles (≈1,000, 10 pages) → ranks them for the query (BM25 over title + content, title bonus, customer language first) → returns the top 5 (title, URL, audience, first 1,800 chars). Ada's API has no search endpoint, that's why it ranks here.",
+        "height": 220,
+        "width": 520
+      },
+      "id": "b1412f7b-9d7c-52b8-875b-f332607a34b8",
+      "name": "Note · KB tool",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "3202a6af-7877-55de-837e-10f6a00db4b9",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://getontop.zendesk.com/api/v2/search.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "type:ticket status:open group:\"Worker Support\" -assignee:none -tags:nova_resolver_skip"
+            },
+            {
+              "name": "sort_by",
+              "value": "updated_at"
+            },
+            {
+              "name": "sort_order",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "50"
+            }
+          ]
+        }
+      },
+      "id": "64e137a2-bc57-5948-88d6-a4c435c2fe54",
+      "name": "Search Open · Worker Support",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        200,
+        -100
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://getontop.zendesk.com/api/v2/search.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "type:ticket status:open group:\"Company Support\" -assignee:none -tags:nova_resolver_skip"
+            },
+            {
+              "name": "sort_by",
+              "value": "updated_at"
+            },
+            {
+              "name": "sort_order",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "50"
+            }
+          ]
+        }
+      },
+      "id": "ffd2e024-0757-5cc5-a2c3-b8b971a91fcf",
+      "name": "Search Open · Company Support",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        200,
+        100
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keep only what Filter needs (Zendesk tickets carry ~300 custom fields; full search results stalled the task runner in Nova Router).\nconst CAT = 22865771347348;\nconst results = ($input.first()?.json?.results) || [];\nconst slim = results.map(t => ({\n  id: t.id, subject: t.subject, group_id: t.group_id, status: t.status, requester_id: t.requester_id,\n  created_at: t.created_at, updated_at: t.updated_at, assignee_id: t.assignee_id || null,\n  channel: t.via?.channel || null, tags: t.tags || [],\n  category: ((t.custom_fields || []).find(f => f.id === CAT) || {}).value || null,\n}));\nreturn [{ json: { source: 'ws', results: slim } }];"
+      },
+      "id": "27557c95-7871-5a4a-8e73-48e1f3d0c14d",
+      "name": "Slim · WS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keep only what Filter needs (Zendesk tickets carry ~300 custom fields; full search results stalled the task runner in Nova Router).\nconst CAT = 22865771347348;\nconst results = ($input.first()?.json?.results) || [];\nconst slim = results.map(t => ({\n  id: t.id, subject: t.subject, group_id: t.group_id, status: t.status, requester_id: t.requester_id,\n  created_at: t.created_at, updated_at: t.updated_at, assignee_id: t.assignee_id || null,\n  channel: t.via?.channel || null, tags: t.tags || [],\n  category: ((t.custom_fields || []).find(f => f.id === CAT) || {}).value || null,\n}));\nreturn [{ json: { source: 'cs', results: slim } }];"
+      },
+      "id": "cbebb01d-9dcc-5ff9-89b1-36ea3083ba00",
+      "name": "Slim · CS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        100
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e78ba453-3d22-517e-994e-7eadf0c17d15",
+      "name": "Merge Queues",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Nova Resolver v1: pick up to 5 OPEN tickets that already have a roster owner and are waiting on us.\n// One pass per ticket: tag nova_res_<yyyymmddhhmm> (UTC). Re-check only when there was activity after our pass\n// (beyond our own write) AND at least 4 h passed. Everything comes from the Merge input — no $() lookups.\nconst A = { justin: 54788295418644, sudu: 24567978777492, jaime: 55350915332244, caro: 32288140085012, cristian: 48493524357268, brisa: 47071350698516, miguel: 28269839522452, samuel: 40230868739348, mike: 42677627758740 };\nconst N = { justin: 'Justin', sudu: 'Sudu', jaime: 'Jaime', caro: 'Carolina', cristian: 'Cristian', brisa: 'Brisa', miguel: 'Miguel', samuel: 'Samuel', mike: 'Mike' };\nconst DOMAIN = { justin: 'payouts', sudu: 'payouts', caro: 'card', jaime: 'draft_only', cristian: 'draft_only', brisa: 'draft_only', miguel: 'draft_only', samuel: 'draft_only', mike: 'draft_only' };\nconst IDS = Object.fromEntries(Object.entries(A).map(([k, v]) => [v, k]));\nconst MAX = 5, REVISIT_H = 4, OWN_WRITE_MIN = 10, MIN_IDLE_MIN = 3;\nconst now = Date.now();\nconst stampMs = tg => {\n  const s = (tg || []).map(x => /^nova_res_(\\d{12})$/.exec(x)).filter(Boolean).map(m => m[1]).sort().pop();\n  if (!s) return null;\n  return Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(8, 10), +s.slice(10, 12));\n};\nconst all = $input.all().flatMap(i => i.json.results || []);\nconst seen = new Set(), out = [];\n// payouts first (the only domain where Nova acts), then the rest; newest activity first inside each\nconst rank = t => (DOMAIN[IDS[t.assignee_id]] === 'payouts' ? 0 : DOMAIN[IDS[t.assignee_id]] === 'card' ? 1 : 2);\nall.sort((a, b) => rank(a) - rank(b) || new Date(b.updated_at) - new Date(a.updated_at));\nfor (const t of all) {\n  if (out.length >= MAX) break;\n  if (seen.has(t.id) || t.status !== 'open') continue;\n  const key = IDS[t.assignee_id];\n  if (!key) continue; // owner outside the roster\n  const tg = t.tags || [];\n  if (tg.includes('nova_resolver_skip') || tg.includes('closed_by_merge')) continue;\n  const upd = new Date(t.updated_at).getTime();\n  if (now - upd < MIN_IDLE_MIN * 60000) continue; // someone is typing right now\n  const st = stampMs(tg);\n  if (st) {\n    if (upd <= st + OWN_WRITE_MIN * 60000) continue;      // nothing new since our pass\n    if (now - st < REVISIT_H * 3600000) continue;          // too soon to look again\n  }\n  seen.add(t.id);\n  out.push({ json: {\n    ticket_id: t.id, subject: t.subject, group: t.group_id === 23897889259668 ? 'Company Support' : 'Worker Support',\n    requester_id: t.requester_id, channel: t.channel, category: t.category, created_at: t.created_at, updated_at: t.updated_at,\n    owner_key: key, owner: N[key], domain: DOMAIN[key], tags: tg,\n    old_stamps: tg.filter(x => /^nova_res_\\d{12}$/.test(x)), revisit: !!st,\n  }});\n}\nreturn out;"
+      },
+      "id": "a9500885-d378-5961-8b97-dcf50af82609",
+      "name": "Filter & Prioritize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a48a75d1-fbfc-564e-9179-9595681c6982",
+      "name": "Loop Over Tickets",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Prepare this ticket for its owner.\n\nTicket ID: {{ $json.ticket_id }}\nSubject: {{ $json.subject }}\nGroup: {{ $json.group }}\nOwner: {{ $json.owner }} (domain: {{ $json.domain }})\nCategory tag: {{ $json.category || '(empty)' }}\nRequester ID: {{ $json.requester_id }}\nChannel: {{ $json.channel }}\nCreated: {{ $json.created_at }} · Last update: {{ $json.updated_at }}{{ $json.revisit ? '\\nNote: Nova already left a note before — focus on what is NEW since its last note.' : '' }}\n\nUse your tools, then return ONLY the structured output.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are **Nova Resolver**, an AI assistant for Ontop's CX team (Worker Support + Company Support in Zendesk).\nThe ticket already has a human owner and is waiting on us. Your job: do the homework the agent would do and return the JSON described by the output parser. You never write to Zendesk, never reply to customers and never change anything — n8n turns your output into ONE internal note (and, only for Payouts, maybe a side conversation).\n\n## Steps (always in this order)\n1. Read the WHOLE conversation: `Get Ticket Conversation` (comments, newest first). For messaging channels (whatsapp, native_messaging, chat, sunshine…) ALSO `Get Conversation Log` and `Get Chat History (Aura)` (audits → ChatStartedEvent value.history = the chat with Aura before the handoff). Identify the customer's CURRENT ask (the latest unanswered question), what we already told them, and what they already sent (screenshots, IDs).\n2. `Get Side Conversations`: is a team already working on it? What did they answer? If a team already answered, the draft should relay that answer.\n3. Onsight (`MCP Onsight`, SQL, read-only) to verify facts: the requester's account/contract (process_data.contract: cod_currency, pay_per_thing, is_active_contract…), wallet transactions (process_data.wallet_transaction: status, amount, dates; a REFUND_* row with id_original_wallet_transaction = that transfer FAILED and was refunded), KYC, Paycheck Advance, card, etc. Look up the requester by email / CR code from the ticket fields or comments. Only state facts you actually saw.\n4. `Search Aura Knowledge` (1–3 searches, short keyword queries in the customer's language) to find the official answer/policy. Base the draft on these articles — never invent policies, fees, limits or timelines.\n5. Decide `answerable`, write the draft, and decide about the side conversation.\n\n## Draft reply rules (customer-facing text)\n- Language of the customer (es neutral latam with \"tú\", en-US, pt-BR…). Warm, empathetic, short, concrete. Greet by first name if known. No markdown headings.\n- Never: provider/partner names (banks rails, processors, card issuer, etc.), internal statuses or system names, Onsight, Nova, Aura internals, account numbers, other customers' data.\n- No ETAs or promised timelines — EXCEPT Paycheck Advance: \"up to 48 business hours\" (hasta 48 horas hábiles) from the PA one-pager.\n- Never list restricted countries, never mention sanctions/OFAC. Future Fund: never call it safe/seguro, savings/ahorro or interest/interés. No crypto workarounds for Ukraine.\n- Paycheck Advance: follow the CX one-pager in Aura's knowledge (banner states, Pending balance / Settle now, request flow, rejection text, cancel rules). Only USD contracts are eligible (EUR/COP contracts are no longer eligible) — be empathetic.\n- Third-party accounts: workers must withdraw to an account in their own name.\n- If something is missing, the draft asks for exactly that (e.g. screenshot, transaction ID, date) — once, clearly.\n- If the honest answer is \"a team is checking\", say we are checking it with the team and will update them — without a date.\n\n## answerable\n- `yes`: the draft fully answers with verified facts / official knowledge.\n- `needs_customer_info`: we need something from the customer (draft asks for it).\n- `needs_team`: only another team can answer (Payouts, Card, Tech, Compliance…). The draft is a holding reply.\n- `not_enough_info`: you could not understand or verify enough — say why in `missing_info`.\n\n## Side conversation (decide, n8n enforces the rules)\nSet `side_conversation_needed=true` only if another team must act or confirm AND no open side conversation already covers it (`sc_already_open=true` if one does).\n- `sc_team`: payouts (bank transfers / withdrawals pending, rejected, on hold, recall, refunds of transfers), card (Ontop Card, Reserve, Concierge, card charges/disputes), tech (app errors/bugs), compliance (account blocks, KYC reviews), other.\n- `sc_ready=true` only if you have everything the team needs, verified in Onsight: worker CR / client code, transaction ID(s), amount + currency, date, current status, destination type and country (NEVER full account numbers), and what the customer reports.\n- `sc_transaction_ids`: the confirmed transaction ID(s) from Onsight, comma-separated (\"\" if none).\n- `sc_subject` (short, English) and `sc_body` (English, to the internal team): greeting, the facts above as a short list, the precise question (e.g. \"Will this transfer be credited or should it be refunded?\"), thanks. No customer-facing tone, no speculation.\nn8n only CREATES it for the Payouts domain with high confidence; for other domains it is shown as a suggestion in the note.\n\n## Other fields\n- `ask`: one line, English. `onsight_facts`: short, only what you verified (or \"not verified\").\n- `kb_used`: the articles you actually used (title + url).\n- `suggested_action`: one line for the owner (e.g. \"Send draft and set pending\", \"Wait for Payouts reply in SC\", \"Ask Tech via SC\").\n- `risk_flags`: anything sensitive (legal threat, possible fraud/ATO, angry customer, money > USD 1,000, VIP) or \"\".\n- `last_customer_message_at`: ISO time of the customer's last message (\"\" if unknown).\n- Output everything in ENGLISH except `draft_reply` (customer language).",
+          "maxIterations": 14
+        }
+      },
+      "id": "3b7f95fd-0006-5af2-aa52-e8ee7c8bab6b",
+      "name": "Nova Resolver Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1240,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-sonnet-5"
+        },
+        "options": {
+          "maxTokensToSample": 4096
+        }
+      },
+      "id": "ddb45a51-856f-510f-8fce-adf991adf5f0",
+      "name": "Claude (Anthropic)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        1040,
+        260
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "fqAjOy5hTw5zKK8l",
+          "name": "Mike's Claude"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Latest comments (public + internal) of a Zendesk ticket, newest first, with author and time. Use it to read what the customer asks and what we already answered.",
+        "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $fromAI('ticket_id', 'Zendesk ticket ID (number)', 'number') }}/comments.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sort_order",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "30"
+            }
+          ]
+        }
+      },
+      "id": "82a33823-b6c4-585b-b74a-66cf25e1caf0",
+      "name": "Get Ticket Conversation",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        260
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Customer messages of WhatsApp/chat/native_messaging tickets after the handoff (conversation log, newest first). ALWAYS call it for messaging tickets.",
+        "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $fromAI('ticket_id', 'Zendesk ticket ID (number)', 'number') }}/conversation_log",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page[size]",
+              "value": "30"
+            },
+            {
+              "name": "sort",
+              "value": "-created_at"
+            }
+          ]
+        }
+      },
+      "id": "bcbf9dcb-9d51-539c-9785-955f3d1dcc8d",
+      "name": "Get Conversation Log",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1280,
+        260
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Ticket audits, newest first. Events with type 'ChatStartedEvent' hold value.history = the customer's chat with the Aura bot before the handoff (message, actor_type, timestamp ms). ALWAYS call it for messaging tickets.",
+        "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $fromAI('ticket_id', 'Zendesk ticket ID (number)', 'number') }}/audits.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "sort_order",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "30"
+            }
+          ]
+        }
+      },
+      "id": "ab6383d1-4876-58ae-a470-03fa906c3f25",
+      "name": "Get Chat History (Aura)",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        260
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Side conversations of the ticket: team/group asked, subject, state, last update and preview. Use it to know whether a team (Payouts, Card, Tech…) is already on it and what they answered.",
+        "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $fromAI('ticket_id', 'Zendesk ticket ID (number)', 'number') }}/side_conversations.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "options": {}
+      },
+      "id": "ca6b16cc-689d-5ead-a233-1f59a6132d13",
+      "name": "Get Side Conversations",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        260
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Zendesk user profile of the requester (name, email, phone, user_fields). Use the email/CR code to look the person up in Onsight.",
+        "url": "=https://getontop.zendesk.com/api/v2/users/{{ $fromAI('requester_id', 'Zendesk requester ID (number)', 'number') }}.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "options": {}
+      },
+      "id": "7f90a859-d36b-5fc7-8c0e-927b9d8f3c02",
+      "name": "Get Requester",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1640,
+        260
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Search Aura's official knowledge base (Ada articles, ~1,000, es + en, workers and clients). Input: a short keyword query in the customer's language (e.g. 'transferencia rechazada devolución', 'paycheck advance pending balance', 'reset password'). Returns the top 5 articles with title, URL, audience and the first 1,800 characters. Call it 1-3 times with different keywords; base the draft only on what it returns.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $workflow.id }}"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "query": "={{ $fromAI('query', 'Short keyword query in the customer language', 'string') }}",
+            "language": "={{ $fromAI('language', 'Customer language code: es, en or pt', 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "language",
+              "displayName": "language",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "a4deb1b5-4cde-53e9-aa1c-f06ace5038f9",
+      "name": "Search Aura Knowledge",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.1,
+      "position": [
+        1760,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp.onsight.getontop.com/mcp",
+        "authentication": "bearerAuth",
+        "include": "selected",
+        "includeTools": [
+          "onsight_execute_sql"
+        ],
+        "options": {}
+      },
+      "id": "47e6c0f9-abe3-5c74-baa8-93521dc132d1",
+      "name": "MCP Onsight",
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.2,
+      "position": [
+        1880,
+        260
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "rDqWGxM1Gs12nCkK",
+          "name": "Mike's Onsight"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n \"type\": \"object\",\n \"properties\": {\n  \"ticket_id\": {\n   \"type\": \"number\"\n  },\n  \"requester_type\": {\n   \"type\": \"string\",\n   \"enum\": [\n    \"worker\",\n    \"client\"\n   ]\n  },\n  \"reply_language\": {\n   \"type\": \"string\",\n   \"description\": \"es, en, pt…\"\n  },\n  \"ask\": {\n   \"type\": \"string\"\n  },\n  \"onsight_facts\": {\n   \"type\": \"string\"\n  },\n  \"kb_used\": {\n   \"type\": \"array\",\n   \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n     \"title\": {\n      \"type\": \"string\"\n     },\n     \"url\": {\n      \"type\": \"string\"\n     }\n    }\n   }\n  },\n  \"answerable\": {\n   \"type\": \"string\",\n   \"enum\": [\n    \"yes\",\n    \"needs_customer_info\",\n    \"needs_team\",\n    \"not_enough_info\"\n   ]\n  },\n  \"confidence\": {\n   \"type\": \"string\",\n   \"enum\": [\n    \"high\",\n    \"medium\",\n    \"low\"\n   ]\n  },\n  \"draft_reply\": {\n   \"type\": \"string\"\n  },\n  \"missing_info\": {\n   \"type\": \"string\"\n  },\n  \"suggested_action\": {\n   \"type\": \"string\"\n  },\n  \"side_conversation_needed\": {\n   \"type\": \"boolean\"\n  },\n  \"sc_team\": {\n   \"type\": \"string\",\n   \"enum\": [\n    \"payouts\",\n    \"card\",\n    \"tech\",\n    \"compliance\",\n    \"other\",\n    \"none\"\n   ]\n  },\n  \"sc_already_open\": {\n   \"type\": \"boolean\"\n  },\n  \"sc_ready\": {\n   \"type\": \"boolean\"\n  },\n  \"sc_transaction_ids\": {\n   \"type\": \"string\"\n  },\n  \"sc_subject\": {\n   \"type\": \"string\"\n  },\n  \"sc_body\": {\n   \"type\": \"string\"\n  },\n  \"risk_flags\": {\n   \"type\": \"string\"\n  },\n  \"last_customer_message_at\": {\n   \"type\": \"string\"\n  }\n },\n \"required\": [\n  \"ticket_id\",\n  \"requester_type\",\n  \"reply_language\",\n  \"ask\",\n  \"onsight_facts\",\n  \"answerable\",\n  \"confidence\",\n  \"draft_reply\",\n  \"suggested_action\",\n  \"side_conversation_needed\",\n  \"sc_team\",\n  \"sc_ready\"\n ]\n}"
+      },
+      "id": "2336ce67-4919-5825-8548-7d580166ac9a",
+      "name": "Resolver Output Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        2000,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ (() => {\n  const d = $json.output || {};\n  const tk = $('Loop Over Tickets').item.json || {};\n  if (!d.ticket_id || Number(d.ticket_id) !== Number(tk.ticket_id)) return JSON.stringify({ skip: true, error: 'Agent returned no valid result', ticket_id: tk.ticket_id });\n  const MSG = ['whatsapp', 'native_messaging', 'sunshine_conversations_api', 'sunshine_conversations_facebook_messenger', 'chat', 'instagram_dm', 'line', 'telegram', 'wechat'];\n  const ANS = { yes: '✅ Yes — the draft below answers it', needs_customer_info: '🟡 Needs info from the customer (draft asks for it)', needs_team: '🟠 Needs another team before answering', not_enough_info: '⚪ Not enough information to answer' };\n  const TEAM = { payouts: 'Payouts', card: 'Ontop Card / Reserve team', tech: 'Tech / Product', compliance: 'Compliance / R&C', other: 'another team', none: '-' };\n  const ch = tk.channel || '';\n  const kb = (d.kb_used || []).slice(0, 4).map(k => '  – ' + (k.title || '') + (k.url ? ' (' + k.url + ')' : '')).join('\\n');\n  // Payouts side conversation: only Justin/Sudu domain, only with confirmed data and high confidence\n  const txOk = /\\d{5,}/.test(String(d.sc_transaction_ids || ''));\n  const scCreate = tk.domain === 'payouts' && d.side_conversation_needed === true && d.sc_team === 'payouts' && d.sc_already_open !== true && d.sc_ready === true && d.confidence === 'high' && txOk && !!d.sc_body;\n  const scSuggest = !scCreate && d.side_conversation_needed === true && d.sc_already_open !== true && !!d.sc_body;\n  const why = [];\n  if (d.side_conversation_needed && !scCreate) {\n    if (tk.domain !== 'payouts') why.push('domain ' + tk.domain + ' → suggestion only');\n    else {\n      if (d.sc_team !== 'payouts') why.push('team is ' + (d.sc_team || '-'));\n      if (d.sc_ready !== true) why.push('data not complete');\n      if (d.confidence !== 'high') why.push('confidence ' + d.confidence);\n      if (!txOk) why.push('no confirmed transaction ID');\n    }\n  }\n  let chLine = '';\n  if (MSG.includes(ch)) {\n    const last = d.last_customer_message_at ? Date.parse(d.last_customer_message_at) : NaN;\n    const hrs = isNaN(last) ? null : (Date.now() - last) / 36e5;\n    chLine = '📱 Messaging ticket (' + ch + '): send from Agent Workspace — public comments through the Ticket API do NOT reach the customer.';\n    if (ch === 'whatsapp') {\n      if (hrs === null) chLine += ' Check the WhatsApp 24h window before replying.';\n      else if (hrs > 24) chLine += ' ⏰ WhatsApp 24h window CLOSED (~' + Math.round(hrs) + 'h): first send template \"reactivar_conversacion\" (' + (d.reply_language === 'en' ? 'en' : 'es') + '), reply after the customer answers.';\n      else chLine += ' WhatsApp window open (~' + Math.max(0, Math.round(24 - hrs)) + 'h left).';\n    }\n  }\n  const lines = [\n    '🤖 Nova Resolver · draft (v1) · ' + $now.setZone('America/Bogota').toFormat('dd LLL HH:mm') + ' COL' + (tk.revisit ? ' · re-check after new activity' : ''),\n    'Owner: ' + tk.owner + ' · Domain: ' + tk.domain + ' · Confidence: ' + d.confidence,\n    '• Ask: ' + (d.ask || '-'),\n    '• Onsight: ' + (d.onsight_facts || 'not verified'),\n    '• Aura knowledge used:' + (kb ? '\\n' + kb : ' none'),\n    '• Can we answer now? ' + (ANS[d.answerable] || d.answerable || '-'),\n    d.missing_info ? '• Missing: ' + d.missing_info : '',\n    '• Suggested action: ' + (d.suggested_action || '-'),\n    '• Draft reply (' + (d.reply_language || '-') + '):\\n\"' + (d.draft_reply || '') + '\"',\n    d.risk_flags ? '⚠️ ' + d.risk_flags : '',\n    chLine,\n  ].filter(Boolean);\n  const suggestText = scSuggest ? '💡 Suggested side conversation to ' + (TEAM[d.sc_team] || d.sc_team) + ' (NOT created' + (why.length ? ': ' + why.join(', ') : '') + ') — copy if useful:\\nSubject: ' + (d.sc_subject || '') + '\\n' + d.sc_body : '';\n  const sc = scCreate ? { message: { subject: '[Ticket #' + tk.ticket_id + '] ' + (d.sc_subject || 'Transfer status check'), body: d.sc_body + '\\n\\nZendesk ticket #' + tk.ticket_id + ' · Transaction ID(s): ' + d.sc_transaction_ids + '\\nThank you! 🙌', to: [{ support_group_id: 27679198971284 }] } } : null;\n  const stamp = 'nova_res_' + $now.toUTC().toFormat('yyyyLLddHHmm');\n  return JSON.stringify({ skip: false, ticket_id: tk.ticket_id, owner: tk.owner, domain: tk.domain, channel: ch,\n    note_base: lines.join('\\n'), suggest_text: suggestText, footer: 'This is a draft — please validate before sending 🙌',\n    sc_create: scCreate, sc: sc, sc_suggested: scSuggest, sc_team: d.sc_team || 'none',\n    answerable: d.answerable || '', confidence: d.confidence || '', reply_language: d.reply_language || '',\n    ask: d.ask || '', kb_titles: (d.kb_used || []).map(k => k.title).join(' | '),\n    stamp: stamp, remove_tags: tk.old_stamps || [] });\n})() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1600,
+        0
+      ],
+      "id": "c319a760-f9d9-50da-92ab-44f79c2bb43b",
+      "name": "Build Resolver Actions"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "18581dcf-cd02-5927-a90a-8794414a25f8",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "332e830d-5b04-5c71-b265-8f3bebce9216",
+      "name": "Has Result?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e5994ac4-15ee-5b22-8653-865d0d952f6f",
+              "leftValue": "={{ $json.sc_create }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8b639b88-0d03-55b6-b702-12bd25b16b62",
+      "name": "Is Payouts SC?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2000,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $json.ticket_id }}/side_conversations.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.sc) }}",
+        "options": {}
+      },
+      "id": "adbd07a7-3f80-54bb-99f3-b06224b128ae",
+      "name": "Create Payouts Side Conversation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        -200
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ (() => { const b = $('Build Resolver Actions').item.json; let res = 'n/a', line = b.suggest_text; if (b.sc_create) { const id = $json.side_conversation && $json.side_conversation.id; if (id && !$json.error) { res = 'created'; line = '✅ Nova opened a side conversation to Payouts: \"' + b.sc.message.subject + '\" — follow up there and relay their answer to the customer.'; } else { res = 'failed'; line = '⚠️ Nova tried to open a side conversation to Payouts but it failed (' + String(($json.error && ($json.error.message || $json.error)) || 'unknown').slice(0, 120) + '). Please open it manually:\\nSubject: ' + b.sc.message.subject + '\\n' + b.sc.message.body; } } const body = [b.note_base, line, b.footer].filter(Boolean).join('\\n'); return JSON.stringify({ ticket_id: b.ticket_id, sc_result: res, update: { ticket: { comment: { public: false, body } } } }); })() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2400,
+        -100
+      ],
+      "id": "e9e8b616-ffe0-5b10-b727-ebd64e0f8ef3",
+      "name": "Compose Note"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $json.ticket_id }}.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.update) }}",
+        "options": {}
+      },
+      "id": "0b2364ce-26a8-5be6-8bb0-2d8406b491dd",
+      "name": "Post Internal Note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2600,
+        -100
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://getontop.zendesk.com/api/v2/tickets/update_many.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "zendeskApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ticket: { additional_tags: [$('Build Resolver Actions').item.json.stamp], remove_tags: $('Build Resolver Actions').item.json.remove_tags } }) }}",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ids",
+              "value": "={{ $('Build Resolver Actions').item.json.ticket_id }}"
+            }
+          ]
+        }
+      },
+      "id": "cea76f5c-3cac-5bb4-8bd6-9fe044074ef8",
+      "name": "Stamp Tags",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2800,
+        -100
+      ],
+      "credentials": {
+        "zendeskApi": {
+          "id": "VmW979VdDHSmLoVJ",
+          "name": "Mike Zendesk"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ JSON.stringify({ timestamp: $now.setZone('America/Bogota').toFormat('yyyy-LL-dd HH:mm'), ticket_id: $('Build Resolver Actions').item.json.ticket_id, owner: $('Build Resolver Actions').item.json.owner, domain: $('Build Resolver Actions').item.json.domain, channel: $('Build Resolver Actions').item.json.channel, answerable: $('Build Resolver Actions').item.json.answerable, confidence: $('Build Resolver Actions').item.json.confidence, language: $('Build Resolver Actions').item.json.reply_language, ask: $('Build Resolver Actions').item.json.ask, sc_team: $('Build Resolver Actions').item.json.sc_team, sc_created: $('Build Resolver Actions').item.json.sc_create, sc_result: $('Compose Note').item.json.sc_result, sc_suggested: $('Build Resolver Actions').item.json.sc_suggested, note_posted: !$json.error, kb_used: $('Build Resolver Actions').item.json.kb_titles }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3000,
+        -100
+      ],
+      "id": "5817159d-2551-5436-b9de-db8e07bcdc51",
+      "name": "Build Log Row"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1aLBW9WHEI9ioZtFRcC9og3B2IeHYUk1iOhQfQIQTkpo"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "279705919"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "4b88486b-def2-526c-89af-119afecf47ed",
+      "name": "Log Resolver Result",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3200,
+        -100
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "yOY66jkPN4WkAUzQ",
+          "name": "Mike Google Sheets"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "query"
+            },
+            {
+              "name": "language"
+            }
+          ]
+        }
+      },
+      "id": "1db1a01b-d299-5391-9a14-a8544e21a307",
+      "name": "When Called as KB Tool",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://ontop-gen.ada.support/api/v2/knowledge/articles",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "enabled",
+              "value": "true"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "pagination": {
+            "pagination": {
+              "paginationMode": "responseContainsNextURL",
+              "nextURL": "={{ $response.body.meta.next_page_url }}",
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.meta || !$response.body.meta.next_page_url }}",
+              "limitPagesFetched": true,
+              "maxRequests": 30
+            }
+          }
+        }
+      },
+      "id": "d2c4bdf9-d4d0-547b-8ef6-001a07385029",
+      "name": "Fetch Ada Knowledge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        800
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ADA_CRED",
+          "name": "Ada Knowledge API"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rank Ada knowledge articles for a free-text query (BM25-lite over name + content). Input: the paginated\n// /knowledge/articles responses (one item per page). Output: ONE item with the top matches, trimmed.\nconst q = String(($('When Called as KB Tool').first().json.query) || '');\nconst lang = String(($('When Called as KB Tool').first().json.language) || '').toLowerCase();\nconst norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');\nconst STOP = new Set('a al algo como con de del el en es esta este la las lo los mi mis no o para por que se si su sus tu tus un una y yo me le the to of and or in on for is are my your how what why when can do does i it with from be have has not at this that an as by'.split(' '));\nconst toks = s => norm(s).split(/[^a-z0-9]+/).filter(w => w.length > 2 && !STOP.has(w));\nconst stem = w => w.length > 5 ? w.slice(0, 5) : w; // cheap stemming: transferencia/transferencias/transfer → trans... \nconst qt = [...new Set(toks(q).map(stem))];\nconst arts = $input.all().flatMap(i => i.json.data || []).filter(a => a.enabled !== false);\nconst docs = arts.map(a => {\n  const nt = toks(a.name).map(stem), ct = toks(a.content).map(stem);\n  const tf = {}; for (const w of ct) tf[w] = (tf[w] || 0) + 1;\n  return { a, nt: new Set(nt), tf, len: ct.length || 1 };\n});\nconst N = docs.length, avg = docs.reduce((s, d) => s + d.len, 0) / (N || 1);\nconst df = {}; for (const w of qt) df[w] = docs.filter(d => d.tf[w] || d.nt.has(w)).length;\nconst scored = docs.map(d => {\n  let s = 0;\n  for (const w of qt) {\n    const idf = Math.log(1 + (N - df[w] + 0.5) / (df[w] + 0.5));\n    const f = d.tf[w] || 0;\n    s += idf * (f * 2.2) / (f + 1.2 * (0.25 + 0.75 * d.len / avg));\n    if (d.nt.has(w)) s += idf * 1.5; // title match bonus\n  }\n  const loc = norm(d.a.locale || d.a.language || '');\n  if (lang && loc && !loc.startsWith(lang)) s *= 0.6; // prefer the customer's language\n  return { s, d };\n}).filter(x => x.s > 0).sort((x, y) => y.s - x.s).slice(0, 5);\nreturn [{ json: { query: q, total_articles: N, results: scored.map(({ s, d }) => ({\n  score: Math.round(s * 10) / 10, id: d.a.id, title: d.a.name, url: d.a.url || '', locale: d.a.locale || d.a.language || '',\n  content: String(d.a.content || '').slice(0, 1800),\n})) } }];\n"
+      },
+      "id": "88357f0c-94bf-5288-9270-4491d8bd4d73",
+      "name": "Rank Articles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        800
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "6a610b19-69a0-5f22-80ef-bacb150255bc",
+      "name": "On Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C09SPJRDY6S",
+          "mode": "id"
+        },
+        "text": "=⚠️ Nova Resolver workflow failed: {{ $json.execution.error.message }}\nNode: {{ $json.execution.lastNodeExecuted }} · {{ $json.execution.url }}",
+        "otherOptions": {}
+      },
+      "id": "060a090e-0431-5084-9ae4-1c1c4ab8fad1",
+      "name": "Send Error Alert to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        220,
+        800
+      ],
+      "webhookId": "d53594b5-cc9d-55ce-993c-6f945d542794",
+      "credentials": {
+        "slackApi": {
+          "id": "WZT6W2KExNG7rKOc",
+          "name": "new-initiatives-bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Search Open · Worker Support",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Search Open · Company Support",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Open · Worker Support": {
+      "main": [
+        [
+          {
+            "node": "Slim · WS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Open · Company Support": {
+      "main": [
+        [
+          {
+            "node": "Slim · CS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slim · WS": {
+      "main": [
+        [
+          {
+            "node": "Merge Queues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slim · CS": {
+      "main": [
+        [
+          {
+            "node": "Merge Queues",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Queues": {
+      "main": [
+        [
+          {
+            "node": "Filter & Prioritize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter & Prioritize": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Tickets": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Nova Resolver Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nova Resolver Agent": {
+      "main": [
+        [
+          {
+            "node": "Build Resolver Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (Anthropic)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Nova Resolver Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Ticket Conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Resolver Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Conversation Log": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Resolver Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Chat History (Aura)": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Resolver Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Side Conversations": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Resolver Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Requester": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Resolver Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Aura Knowledge": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Resolver Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP Onsight": {
+      "ai_tool": [
+        [
+          {
+            "node": "Nova Resolver Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver Output Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Nova Resolver Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Resolver Actions": {
+      "main": [
+        [
+          {
+            "node": "Has Result?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Result?": {
+      "main": [
+        [
+          {
+            "node": "Is Payouts SC?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Payouts SC?": {
+      "main": [
+        [
+          {
+            "node": "Create Payouts Side Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compose Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Payouts Side Conversation": {
+      "main": [
+        [
+          {
+            "node": "Compose Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose Note": {
+      "main": [
+        [
+          {
+            "node": "Post Internal Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Internal Note": {
+      "main": [
+        [
+          {
+            "node": "Stamp Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stamp Tags": {
+      "main": [
+        [
+          {
+            "node": "Build Log Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Log Row": {
+      "main": [
+        [
+          {
+            "node": "Log Resolver Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Resolver Result": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Called as KB Tool": {
+      "main": [
+        [
+          {
+            "node": "Fetch Ada Knowledge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Ada Knowledge": {
+      "main": [
+        [
+          {
+            "node": "Rank Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Send Error Alert to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "558d88703fb65b2d0e44613bc35916258b0f0bf983c5d4730c00c424b77ca36a"
+  }
+}
