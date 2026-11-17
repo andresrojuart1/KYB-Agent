@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 Nova Resolver v1.4 (every 15 min + manual backlog sweep)\n\n**Goal:** for tickets that already have an owner and are waiting on us (status *open*), do the homework the agent would do: read the whole conversation, check **Onsight** + **Aura's knowledge (Ada)**, and leave an internal note with the diagnosis, whether it can be answered now, and a **draft reply**.\n\n**Scope by domain (agreed with Mike, Nov 17):**\n• **Justin / Sudu – Payouts (transfers):** Nova may **create the side conversation to the Payouts team** by itself — only when Onsight confirms the transfer (transaction ID, amount, date, status), no side conversation is already open, the customer gave what's needed and confidence is high.\n• **Carolina – Ontop Card / Reserve / Concierge:** side conversation only **suggested** in the note (ready to copy). Not created.\n• **Everyone else (Jaime, Cristian, Brisa, Miguel, Samuel, Mike):** draft only.\n\n**v1.4 · Auto-send (scheduled runs):** if answerable = *yes* + confidence = *high* + no risk flags + the draft passes a wording guard (no provider names, no ETAs except 48 business hours, no sanctions/OFAC, Future Fund wording…), Nova **sends the draft** (email/web → public reply; chat/WhatsApp → Sunshine Conversations, WhatsApp only inside the 24 h window) and sets **solved / pending**. Customer only said \"ok/gracias\" → just solved. Failures leave an internal note. Tag `nova_resolver_auto`.\n**v1.4 · Backlog sweep (manual trigger):** every new/open Worker Support ticket (unassigned included, up to 200), **notes only** (no auto-send) → the *Resolver Nova* sheet shows how many are answerable right now.\n\n**Never:** merges, assignee/category changes, the *Misclassified Ticket* field. One pass per ticket; it is reviewed again only if there is new activity and ≥4 h passed (tag `nova_res_<yyyymmddhhmm>`). Opt-out per ticket: tag `nova_resolver_skip`.",
+        "content": "## 🤖 Nova Resolver v1.5 (every 15 min + manual backlog sweep)\n\n**Goal:** for tickets that already have an owner and are waiting on us (status *open*), do the homework the agent would do: read the whole conversation, check **Onsight** + **Aura's knowledge (Ada)**, and leave an internal note with the diagnosis, whether it can be answered now, and a **draft reply**.\n\n**Scope by domain (agreed with Mike, Nov 17):**\n• **Justin / Sudu – Payouts (transfers):** Nova may **create the side conversation to the Payouts team** by itself — only when Onsight confirms the transfer (transaction ID, amount, date, status), no side conversation is already open, the customer gave what's needed and confidence is high.\n• **Carolina – Ontop Card / Reserve / Concierge:** side conversation only **suggested** in the note (ready to copy). Not created.\n• **Everyone else (Jaime, Cristian, Brisa, Miguel, Samuel, Mike):** draft only.\n\n**v1.4 · Auto-send (scheduled runs):** if answerable = *yes* + confidence = *high* + no risk flags + the draft passes a wording guard (no provider names, no ETAs except 48 business hours, no sanctions/OFAC, Future Fund wording…), Nova **sends the draft** (email/web → public reply; chat/WhatsApp → Sunshine Conversations, WhatsApp only inside the 24 h window) and sets **solved / pending**. Customer only said \"ok/gracias\" → just solved. Failures leave an internal note. Tag `nova_resolver_auto`.\n**v1.5 · Backlog sweep (manual trigger):** every new/open Worker Support ticket (unassigned included, up to 200). **Quiet mode:** answerable *yes* + confidence *high* → Nova replies and sets the status (same guard as above); Payouts side conversations as usual. Everything else: **nothing is written in the ticket** (only the routing tag `nova_res_…` so the next sweep skips it) — the result goes only to the *Resolver Nova* sheet.\n\n**Never:** merges, assignee/category changes, the *Misclassified Ticket* field. One pass per ticket; it is reviewed again only if there is new activity and ≥4 h passed (tag `nova_res_<yyyymmddhhmm>`). Opt-out per ticket: tag `nova_resolver_skip`.",
         "height": 520,
         "width": 620,
         "color": 4
@@ -97,7 +97,7 @@
     {
       "parameters": {
         "mode": "raw",
-        "jsonOutput": "={{ JSON.stringify({ source: \"config\", mode: \"backlog\", max: 200, auto_send: false }) }}",
+        "jsonOutput": "={{ JSON.stringify({ source: \"config\", mode: \"backlog\", max: 200, auto_send: true, quiet: true }) }}",
         "options": {}
       },
       "type": "n8n-nodes-base.set",
@@ -266,7 +266,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Nova Resolver v1.4: scheduled = up to 5 OPEN tickets with a roster owner (WS + CS); backlog (manual) = every new/open\n// Worker Support ticket, unassigned included, notes only. Config arrives as an item with source 'config'.\n// One pass per ticket: tag nova_res_<yyyymmddhhmm> (UTC). Re-check only when there was activity after our pass\n// (beyond our own write) AND at least 4 h passed. Everything comes from the Merge input — no $() lookups.\nconst A = { justin: 54788295418644, sudu: 24567978777492, jaime: 55350915332244, caro: 32288140085012, cristian: 48493524357268, brisa: 47071350698516, miguel: 28269839522452, samuel: 40230868739348, mike: 42677627758740 };\nconst N = { justin: 'Justin', sudu: 'Sudu', jaime: 'Jaime', caro: 'Carolina', cristian: 'Cristian', brisa: 'Brisa', miguel: 'Miguel', samuel: 'Samuel', mike: 'Mike' };\nconst DOMAIN = { justin: 'payouts', sudu: 'payouts', caro: 'card', jaime: 'draft_only', cristian: 'draft_only', brisa: 'draft_only', miguel: 'draft_only', samuel: 'draft_only', mike: 'draft_only' };\nconst IDS = Object.fromEntries(Object.entries(A).map(([k, v]) => [v, k]));\nconst CFG = ($input.all().map(i => i.json).find(x => x.source === 'config')) || { mode: 'scheduled', max: 5, auto_send: false };\nconst BACKLOG = CFG.mode === 'backlog';\nconst MAX = Number(CFG.max) || 5, REVISIT_H = 4, OWN_WRITE_MIN = 10, MIN_IDLE_MIN = 3;\nconst now = Date.now();\nconst stampMs = tg => {\n  const s = (tg || []).map(x => /^nova_res_(\\d{12})$/.exec(x)).filter(Boolean).map(m => m[1]).sort().pop();\n  if (!s) return null;\n  return Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(8, 10), +s.slice(10, 12));\n};\nconst all = $input.all().filter(i => i.json.source === 'ws' || (!BACKLOG && i.json.source === 'cs')).flatMap(i => i.json.results || []);\nconst seen = new Set(), out = [];\n// payouts first (the only domain where Nova acts), then the rest; newest activity first inside each\nconst rank = t => (DOMAIN[IDS[t.assignee_id]] === 'payouts' ? 0 : DOMAIN[IDS[t.assignee_id]] === 'card' ? 1 : 2);\nall.sort((a, b) => rank(a) - rank(b) || new Date(b.updated_at) - new Date(a.updated_at));\nfor (const t of all) {\n  if (out.length >= MAX) break;\n  if (seen.has(t.id)) continue;\n  if (!(t.status === 'open' || (BACKLOG && t.status === 'new'))) continue;\n  const key = IDS[t.assignee_id] || (BACKLOG ? (t.assignee_id ? 'other' : 'unassigned') : null);\n  if (!key) continue; // owner outside the roster (backlog sweep also takes unassigned tickets)\n  const tg = t.tags || [];\n  if (['nova_resolver_skip', 'closed_by_merge', 'nova_followup_entrega'].some(x => tg.includes(x))) continue; // v1.3: our own delivery follow-ups are not customer asks\n  const upd = new Date(t.updated_at).getTime();\n  if (now - upd < MIN_IDLE_MIN * 60000) continue; // someone is typing right now\n  const st = stampMs(tg);\n  if (st) {\n    if (upd <= st + OWN_WRITE_MIN * 60000) continue;      // nothing new since our pass\n    if (now - st < REVISIT_H * 3600000) continue;          // too soon to look again\n  }\n  seen.add(t.id);\n  out.push({ json: {\n    ticket_id: t.id, subject: t.subject, group: t.group_id === 23897889259668 ? 'Company Support' : 'Worker Support',\n    requester_id: t.requester_id, channel: t.channel, category: t.category, created_at: t.created_at, updated_at: t.updated_at,\n    owner_key: key, owner: N[key] || (key === 'other' ? 'Other agent (' + t.assignee_id + ')' : 'Unassigned'), domain: DOMAIN[key] || 'draft_only', tags: tg,\n    mode: CFG.mode, auto_send: CFG.auto_send === true && !['unassigned', 'other'].includes(key),\n    old_stamps: tg.filter(x => /^nova_res_\\d{12}$/.test(x)), revisit: !!st,\n  }});\n}\nreturn out;"
+        "jsCode": "// Nova Resolver v1.4: scheduled = up to 5 OPEN tickets with a roster owner (WS + CS); backlog (manual) = every new/open\n// Worker Support ticket, unassigned included, notes only. Config arrives as an item with source 'config'.\n// One pass per ticket: tag nova_res_<yyyymmddhhmm> (UTC). Re-check only when there was activity after our pass\n// (beyond our own write) AND at least 4 h passed. Everything comes from the Merge input — no $() lookups.\nconst A = { justin: 54788295418644, sudu: 24567978777492, jaime: 55350915332244, caro: 32288140085012, cristian: 48493524357268, brisa: 47071350698516, miguel: 28269839522452, samuel: 40230868739348, mike: 42677627758740 };\nconst N = { justin: 'Justin', sudu: 'Sudu', jaime: 'Jaime', caro: 'Carolina', cristian: 'Cristian', brisa: 'Brisa', miguel: 'Miguel', samuel: 'Samuel', mike: 'Mike' };\nconst DOMAIN = { justin: 'payouts', sudu: 'payouts', caro: 'card', jaime: 'draft_only', cristian: 'draft_only', brisa: 'draft_only', miguel: 'draft_only', samuel: 'draft_only', mike: 'draft_only' };\nconst IDS = Object.fromEntries(Object.entries(A).map(([k, v]) => [v, k]));\nconst CFG = ($input.all().map(i => i.json).find(x => x.source === 'config')) || { mode: 'scheduled', max: 5, auto_send: false };\nconst BACKLOG = CFG.mode === 'backlog';\nconst MAX = Number(CFG.max) || 5, REVISIT_H = 4, OWN_WRITE_MIN = 10, MIN_IDLE_MIN = 3;\nconst now = Date.now();\nconst stampMs = tg => {\n  const s = (tg || []).map(x => /^nova_res_(\\d{12})$/.exec(x)).filter(Boolean).map(m => m[1]).sort().pop();\n  if (!s) return null;\n  return Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(8, 10), +s.slice(10, 12));\n};\nconst all = $input.all().filter(i => i.json.source === 'ws' || (!BACKLOG && i.json.source === 'cs')).flatMap(i => i.json.results || []);\nconst seen = new Set(), out = [];\n// payouts first (the only domain where Nova acts), then the rest; newest activity first inside each\nconst rank = t => (DOMAIN[IDS[t.assignee_id]] === 'payouts' ? 0 : DOMAIN[IDS[t.assignee_id]] === 'card' ? 1 : 2);\nall.sort((a, b) => rank(a) - rank(b) || new Date(b.updated_at) - new Date(a.updated_at));\nfor (const t of all) {\n  if (out.length >= MAX) break;\n  if (seen.has(t.id)) continue;\n  if (!(t.status === 'open' || (BACKLOG && t.status === 'new'))) continue;\n  const key = IDS[t.assignee_id] || (BACKLOG ? (t.assignee_id ? 'other' : 'unassigned') : null);\n  if (!key) continue; // owner outside the roster (backlog sweep also takes unassigned tickets)\n  const tg = t.tags || [];\n  if (['nova_resolver_skip', 'closed_by_merge', 'nova_followup_entrega'].some(x => tg.includes(x))) continue; // v1.3: our own delivery follow-ups are not customer asks\n  const upd = new Date(t.updated_at).getTime();\n  if (now - upd < MIN_IDLE_MIN * 60000) continue; // someone is typing right now\n  const st = stampMs(tg);\n  if (st) {\n    if (upd <= st + OWN_WRITE_MIN * 60000) continue;      // nothing new since our pass\n    if (now - st < REVISIT_H * 3600000) continue;          // too soon to look again\n  }\n  seen.add(t.id);\n  out.push({ json: {\n    ticket_id: t.id, subject: t.subject, group: t.group_id === 23897889259668 ? 'Company Support' : 'Worker Support',\n    requester_id: t.requester_id, channel: t.channel, category: t.category, created_at: t.created_at, updated_at: t.updated_at,\n    owner_key: key, owner: N[key] || (key === 'other' ? 'Other agent (' + t.assignee_id + ')' : 'Unassigned'), domain: DOMAIN[key] || 'draft_only', tags: tg,\n    mode: CFG.mode, quiet: CFG.quiet === true,\n    auto_send: CFG.auto_send === true && (BACKLOG || !['unassigned', 'other'].includes(key)),\n    old_stamps: tg.filter(x => /^nova_res_\\d{12}$/.test(x)), revisit: !!st,\n  }});\n}\nreturn out;"
       },
       "id": "ddb45a51-856f-510f-8fce-adf991adf5f0",
       "name": "Filter & Prioritize",
@@ -585,7 +585,7 @@
     {
       "parameters": {
         "mode": "raw",
-        "jsonOutput": "={{ (() => {\n  const d = $json.output || {};\n  const tk = $('Loop Over Tickets').item.json || {};\n  if (!d.ticket_id || Number(d.ticket_id) !== Number(tk.ticket_id)) return JSON.stringify({ skip: true, error: 'Agent returned no valid result', ticket_id: tk.ticket_id });\n  const MSG = ['whatsapp', 'native_messaging', 'sunshine_conversations_api', 'sunshine_conversations_facebook_messenger', 'chat', 'instagram_dm', 'line', 'telegram', 'wechat'];\n  const ANS = { yes: '✅ Yes — the draft below answers it', needs_customer_info: '🟡 Needs info from the customer (draft asks for it)', needs_team: '🟠 Needs another team before answering', not_enough_info: '⚪ Not enough information to answer' };\n  const TEAM = { payouts: 'Payouts', card: 'Ontop Card / Reserve team', tech: 'Tech / Product', compliance: 'Compliance / R&C', other: 'another team', none: '-' };\n  const ch = tk.channel || '';\n  const kb = (d.kb_used || []).slice(0, 4).map(k => '  – ' + (k.title || '') + (k.url ? ' (' + k.url + ')' : '')).join('\\n');\n  // Payouts side conversation: only Justin/Sudu domain, only with confirmed data and high confidence\n  const txOk = /\\d{5,}/.test(String(d.sc_transaction_ids || ''));\n  const scCreate = tk.domain === 'payouts' && d.side_conversation_needed === true && d.sc_team === 'payouts' && d.sc_already_open !== true && d.sc_ready === true && d.confidence === 'high' && txOk && !!d.sc_body;\n  const scSuggest = !scCreate && d.side_conversation_needed === true && d.sc_already_open !== true && !!d.sc_body;\n  const why = [];\n  if (d.side_conversation_needed && !scCreate) {\n    if (tk.domain !== 'payouts') why.push('domain ' + tk.domain + ' → suggestion only');\n    else {\n      if (d.sc_team !== 'payouts') why.push('team is ' + (d.sc_team || '-'));\n      if (d.sc_ready !== true) why.push('data not complete');\n      if (d.confidence !== 'high') why.push('confidence ' + d.confidence);\n      if (!txOk) why.push('no confirmed transaction ID');\n    }\n  }\n  let chLine = '';\n  if (MSG.includes(ch)) {\n    const last = d.last_customer_message_at ? Date.parse(d.last_customer_message_at) : NaN;\n    const hrs = isNaN(last) ? null : (Date.now() - last) / 36e5;\n    chLine = '📱 Messaging ticket (' + ch + '): send from Agent Workspace — public comments through the Ticket API do NOT reach the customer.';\n    if (ch === 'whatsapp') {\n      if (hrs === null) chLine += ' Check the WhatsApp 24h window before replying.';\n      else if (hrs > 24) chLine += ' ⏰ WhatsApp 24h window CLOSED (~' + Math.round(hrs) + 'h): first send template \"reactivar_conversacion\" (' + (d.reply_language === 'en' ? 'en' : 'es') + '), reply after the customer answers.';\n      else chLine += ' WhatsApp window open (~' + Math.max(0, Math.round(24 - hrs)) + 'h left).';\n    }\n  }\n  const lines = [\n    '🤖 Nova Resolver · draft (v1.4) · ' + $now.setZone('America/Bogota').toFormat('dd LLL HH:mm') + ' COL' + (tk.revisit ? ' · re-check after new activity' : ''),\n    'Owner: ' + tk.owner + ' · Domain: ' + tk.domain + ' · Confidence: ' + d.confidence,\n    '• Ask: ' + (d.ask || '-'),\n    '• Onsight: ' + (d.onsight_facts || 'not verified'),\n    '• Aura knowledge used:' + (kb ? '\\n' + kb : ' none'),\n    '• Can we answer now? ' + (ANS[d.answerable] || d.answerable || '-'),\n    d.missing_info ? '• Missing: ' + d.missing_info : '',\n    '• Suggested action: ' + (d.suggested_action || '-'),\n    '• Draft reply (' + (d.reply_language || '-') + '):\\n\"' + (d.draft_reply || '') + '\"',\n    d.risk_flags ? '⚠️ ' + d.risk_flags : '',\n    chLine,\n  ].filter(Boolean);\n  const suggestText = scSuggest ? '💡 Suggested side conversation to ' + (TEAM[d.sc_team] || d.sc_team) + ' (NOT created' + (why.length ? ': ' + why.join(', ') : '') + ') — copy if useful:\\nSubject: ' + (d.sc_subject || '') + '\\n' + d.sc_body : '';\n  const sc = scCreate ? { message: { subject: '[Ticket #' + tk.ticket_id + '] ' + (d.sc_subject || 'Transfer status check'), body: d.sc_body + '\\n\\nZendesk ticket #' + tk.ticket_id + ' · Transaction ID(s): ' + d.sc_transaction_ids + '\\nThank you! 🙌', to: [{ support_group_id: 27679198971284 }] } } : null;\n  // v1.4 auto-send: answerable=yes + confidence=high + no risk flags + guard words + a channel we can deliver to\n  const TICKET_OK = ['email', 'web', 'api', 'mobile', 'mobile_sdk'];\n  const SUNSHINE_OK = ['native_messaging', 'sunshine_conversations_api', 'whatsapp', 'sunshine_conversations_facebook_messenger', 'instagram_dm'];\n  const txt = String(d.draft_reply || '');\n  const GUARD = [/ofac|sanci[oó]n|sanction|\\bvpn\\b/i, /contrase(ñ|n)a temporal|temporary password/i, /\\b(currencycloud|thunes|nium|rapyd|dlocal|airwallex|lead bank|evolve bank|column bank|circle|bridge\\.xyz)\\b/i,\n    /\\b\\d+\\s*(horas|hours|d[ií]as|days|minutos|minutes)\\b(?![^.]*h[aá]biles|[^.]*business)/i, /\\[|\\{|<|TODO|XX/];\n  const ffBad = /future fund/i.test(txt) && /\\b(segur|ahorro|inter[eé]s|safe|savings|interest)/i.test(txt);\n  const guardHit = GUARD.some(r => r.test(txt)) || ffBad;\n  const lastMs = d.last_customer_message_at ? Date.parse(d.last_customer_message_at) : NaN;\n  const waOpen = !isNaN(lastMs) && (Date.now() - lastMs) / 36e5 < 23;\n  const replyNeeded = d.reply_needed !== false;\n  let sendVia = 'none', autoWhy = [];\n  if (!replyNeeded) sendVia = 'status_only';\n  else if (TICKET_OK.includes(ch)) sendVia = 'ticket';\n  else if (SUNSHINE_OK.includes(ch) && (ch !== 'whatsapp' || waOpen)) sendVia = 'sunshine';\n  else autoWhy.push(ch === 'whatsapp' ? 'WhatsApp 24h window closed/unknown' : 'channel ' + ch + ' not supported');\n  if (!tk.auto_send) autoWhy.push(tk.mode === 'backlog' ? 'backlog sweep = notes only' : 'auto-send off');\n  if (d.answerable !== 'yes') autoWhy.push('answerable=' + d.answerable);\n  if (d.confidence !== 'high') autoWhy.push('confidence ' + d.confidence);\n  if (d.risk_flags) autoWhy.push('risk flags');\n  if (guardHit) autoWhy.push('draft failed the wording guard');\n  if (replyNeeded && txt.length < 40) autoWhy.push('draft too short');\n  const statusAfter = d.status_after_reply === 'pending' ? 'pending' : 'solved';\n  const auto = autoWhy.length === 0 && sendVia !== 'none';\n  const autoLine = auto\n    ? (sendVia === 'status_only' ? '🚀 Auto: customer only acknowledged — no message sent, status → ' + statusAfter + '.' : '🚀 Auto-reply: Nova sends the draft below to the customer (' + (sendVia === 'sunshine' ? 'chat/WhatsApp' : 'email/web') + ') and sets status → ' + statusAfter + '.')\n    : (d.answerable === 'yes' ? '✋ Not sent automatically: ' + autoWhy.join(', ') + '.' : '');\n  const stamp = 'nova_res_' + $now.toUTC().toFormat('yyyyLLddHHmm');\n  return JSON.stringify({ skip: false, ticket_id: tk.ticket_id, owner: tk.owner, domain: tk.domain, channel: ch,\n    note_base: lines.join('\\n'), suggest_text: suggestText, auto_line: autoLine,\n    footer: auto ? 'Sent by Nova (answerable + high confidence). If something is off, follow up with the customer 🙌' : 'This is a draft — please validate before sending 🙌',\n    auto: auto, send_via: sendVia, status_after: statusAfter, reply_text: txt, mode: tk.mode || 'scheduled',\n    sc_create: scCreate, sc: sc, sc_suggested: scSuggest, sc_team: d.sc_team || 'none',\n    answerable: d.answerable || '', confidence: d.confidence || '', reply_language: d.reply_language || '',\n    ask: d.ask || '', kb_titles: (d.kb_used || []).map(k => k.title).join(' | '),\n    stamp: stamp, add_tags: auto ? [stamp, 'nova_resolver_auto'] : [stamp], remove_tags: tk.old_stamps || [] });\n})() }}",
+        "jsonOutput": "={{ (() => {\n  const d = $json.output || {};\n  const tk = $('Loop Over Tickets').item.json || {};\n  if (!d.ticket_id || Number(d.ticket_id) !== Number(tk.ticket_id)) return JSON.stringify({ skip: true, error: 'Agent returned no valid result', ticket_id: tk.ticket_id });\n  const MSG = ['whatsapp', 'native_messaging', 'sunshine_conversations_api', 'sunshine_conversations_facebook_messenger', 'chat', 'instagram_dm', 'line', 'telegram', 'wechat'];\n  const ANS = { yes: '✅ Yes — the draft below answers it', needs_customer_info: '🟡 Needs info from the customer (draft asks for it)', needs_team: '🟠 Needs another team before answering', not_enough_info: '⚪ Not enough information to answer' };\n  const TEAM = { payouts: 'Payouts', card: 'Ontop Card / Reserve team', tech: 'Tech / Product', compliance: 'Compliance / R&C', other: 'another team', none: '-' };\n  const ch = tk.channel || '';\n  const kb = (d.kb_used || []).slice(0, 4).map(k => '  – ' + (k.title || '') + (k.url ? ' (' + k.url + ')' : '')).join('\\n');\n  // Payouts side conversation: only Justin/Sudu domain, only with confirmed data and high confidence\n  const txOk = /\\d{5,}/.test(String(d.sc_transaction_ids || ''));\n  const scCreate = tk.domain === 'payouts' && d.side_conversation_needed === true && d.sc_team === 'payouts' && d.sc_already_open !== true && d.sc_ready === true && d.confidence === 'high' && txOk && !!d.sc_body;\n  const scSuggest = !scCreate && d.side_conversation_needed === true && d.sc_already_open !== true && !!d.sc_body;\n  const why = [];\n  if (d.side_conversation_needed && !scCreate) {\n    if (tk.domain !== 'payouts') why.push('domain ' + tk.domain + ' → suggestion only');\n    else {\n      if (d.sc_team !== 'payouts') why.push('team is ' + (d.sc_team || '-'));\n      if (d.sc_ready !== true) why.push('data not complete');\n      if (d.confidence !== 'high') why.push('confidence ' + d.confidence);\n      if (!txOk) why.push('no confirmed transaction ID');\n    }\n  }\n  let chLine = '';\n  if (MSG.includes(ch)) {\n    const last = d.last_customer_message_at ? Date.parse(d.last_customer_message_at) : NaN;\n    const hrs = isNaN(last) ? null : (Date.now() - last) / 36e5;\n    chLine = '📱 Messaging ticket (' + ch + '): send from Agent Workspace — public comments through the Ticket API do NOT reach the customer.';\n    if (ch === 'whatsapp') {\n      if (hrs === null) chLine += ' Check the WhatsApp 24h window before replying.';\n      else if (hrs > 24) chLine += ' ⏰ WhatsApp 24h window CLOSED (~' + Math.round(hrs) + 'h): first send template \"reactivar_conversacion\" (' + (d.reply_language === 'en' ? 'en' : 'es') + '), reply after the customer answers.';\n      else chLine += ' WhatsApp window open (~' + Math.max(0, Math.round(24 - hrs)) + 'h left).';\n    }\n  }\n  const lines = [\n    '🤖 Nova Resolver · draft (v1.5) · ' + $now.setZone('America/Bogota').toFormat('dd LLL HH:mm') + ' COL' + (tk.revisit ? ' · re-check after new activity' : ''),\n    'Owner: ' + tk.owner + ' · Domain: ' + tk.domain + ' · Confidence: ' + d.confidence,\n    '• Ask: ' + (d.ask || '-'),\n    '• Onsight: ' + (d.onsight_facts || 'not verified'),\n    '• Aura knowledge used:' + (kb ? '\\n' + kb : ' none'),\n    '• Can we answer now? ' + (ANS[d.answerable] || d.answerable || '-'),\n    d.missing_info ? '• Missing: ' + d.missing_info : '',\n    '• Suggested action: ' + (d.suggested_action || '-'),\n    '• Draft reply (' + (d.reply_language || '-') + '):\\n\"' + (d.draft_reply || '') + '\"',\n    d.risk_flags ? '⚠️ ' + d.risk_flags : '',\n    chLine,\n  ].filter(Boolean);\n  const suggestText = scSuggest ? '💡 Suggested side conversation to ' + (TEAM[d.sc_team] || d.sc_team) + ' (NOT created' + (why.length ? ': ' + why.join(', ') : '') + ') — copy if useful:\\nSubject: ' + (d.sc_subject || '') + '\\n' + d.sc_body : '';\n  const sc = scCreate ? { message: { subject: '[Ticket #' + tk.ticket_id + '] ' + (d.sc_subject || 'Transfer status check'), body: d.sc_body + '\\n\\nZendesk ticket #' + tk.ticket_id + ' · Transaction ID(s): ' + d.sc_transaction_ids + '\\nThank you! 🙌', to: [{ support_group_id: 27679198971284 }] } } : null;\n  // v1.4 auto-send: answerable=yes + confidence=high + no risk flags + guard words + a channel we can deliver to\n  const TICKET_OK = ['email', 'web', 'api', 'mobile', 'mobile_sdk'];\n  const SUNSHINE_OK = ['native_messaging', 'sunshine_conversations_api', 'whatsapp', 'sunshine_conversations_facebook_messenger', 'instagram_dm'];\n  const txt = String(d.draft_reply || '');\n  const GUARD = [/ofac|sanci[oó]n|sanction|\\bvpn\\b/i, /contrase(ñ|n)a temporal|temporary password/i, /\\b(currencycloud|thunes|nium|rapyd|dlocal|airwallex|lead bank|evolve bank|column bank|circle|bridge\\.xyz)\\b/i,\n    /\\b\\d+\\s*(horas|hours|d[ií]as|days|minutos|minutes)\\b(?![^.]*h[aá]biles|[^.]*business)/i, /\\[|\\{|<|TODO|XX/];\n  const ffBad = /future fund/i.test(txt) && /\\b(segur|ahorro|inter[eé]s|safe|savings|interest)/i.test(txt);\n  const guardHit = GUARD.some(r => r.test(txt)) || ffBad;\n  const lastMs = d.last_customer_message_at ? Date.parse(d.last_customer_message_at) : NaN;\n  const waOpen = !isNaN(lastMs) && (Date.now() - lastMs) / 36e5 < 23;\n  const replyNeeded = d.reply_needed !== false;\n  let sendVia = 'none', autoWhy = [];\n  if (!replyNeeded) sendVia = 'status_only';\n  else if (TICKET_OK.includes(ch)) sendVia = 'ticket';\n  else if (SUNSHINE_OK.includes(ch) && (ch !== 'whatsapp' || waOpen)) sendVia = 'sunshine';\n  else autoWhy.push(ch === 'whatsapp' ? 'WhatsApp 24h window closed/unknown' : 'channel ' + ch + ' not supported');\n  if (!tk.auto_send) autoWhy.push(tk.mode === 'backlog' ? 'auto-send off' : 'auto-send off');\n  if (d.answerable !== 'yes') autoWhy.push('answerable=' + d.answerable);\n  if (d.confidence !== 'high') autoWhy.push('confidence ' + d.confidence);\n  if (d.risk_flags) autoWhy.push('risk flags');\n  if (guardHit) autoWhy.push('draft failed the wording guard');\n  if (replyNeeded && txt.length < 40) autoWhy.push('draft too short');\n  const statusAfter = d.status_after_reply === 'pending' ? 'pending' : 'solved';\n  const auto = autoWhy.length === 0 && sendVia !== 'none';\n  const autoLine = auto\n    ? (sendVia === 'status_only' ? '🚀 Auto: customer only acknowledged — no message sent, status → ' + statusAfter + '.' : '🚀 Auto-reply: Nova sends the draft below to the customer (' + (sendVia === 'sunshine' ? 'chat/WhatsApp' : 'email/web') + ') and sets status → ' + statusAfter + '.')\n    : (d.answerable === 'yes' ? '✋ Not sent automatically: ' + autoWhy.join(', ') + '.' : '');\n  const stamp = 'nova_res_' + $now.toUTC().toFormat('yyyyLLddHHmm');\n  return JSON.stringify({ skip: false, ticket_id: tk.ticket_id, owner: tk.owner, domain: tk.domain, channel: ch,\n    note_base: lines.join('\\n'), suggest_text: suggestText, auto_line: autoLine,\n    footer: auto ? 'Sent by Nova (answerable + high confidence). If something is off, follow up with the customer 🙌' : 'This is a draft — please validate before sending 🙌',\n    auto: auto, send_via: sendVia,\n    // v1.5: backlog sweep is \"quiet\" — nothing is written to the ticket unless Nova replies or opens a Payouts side conversation\n    post_note: !tk.quiet || auto || scCreate, status_after: statusAfter, reply_text: txt, mode: tk.mode || 'scheduled',\n    sc_create: scCreate, sc: sc, sc_suggested: scSuggest, sc_team: d.sc_team || 'none',\n    answerable: d.answerable || '', confidence: d.confidence || '', reply_language: d.reply_language || '',\n    ask: d.ask || '', kb_titles: (d.kb_used || []).map(k => k.title).join(' | '),\n    stamp: stamp, add_tags: auto ? [stamp, 'nova_resolver_auto'] : [stamp], remove_tags: tk.old_stamps || [] });\n})() }}",
         "options": {}
       },
       "type": "n8n-nodes-base.set",
@@ -709,6 +709,40 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4b88486b-def2-526c-89af-119afecf47ed",
+              "leftValue": "={{ $('Build Resolver Actions').item.json.post_note }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1db1a01b-d299-5391-9a14-a8544e21a307",
+      "name": "Post Note?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2500,
+        -100
+      ]
+    },
+    {
+      "parameters": {
         "method": "PUT",
         "url": "=https://getontop.zendesk.com/api/v2/tickets/{{ $json.ticket_id }}.json",
         "authentication": "predefinedCredentialType",
@@ -718,7 +752,7 @@
         "jsonBody": "={{ JSON.stringify($json.update) }}",
         "options": {}
       },
-      "id": "4b88486b-def2-526c-89af-119afecf47ed",
+      "id": "d2c4bdf9-d4d0-547b-8ef6-001a07385029",
       "name": "Post Internal Note",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -745,7 +779,7 @@
           },
           "conditions": [
             {
-              "id": "1db1a01b-d299-5391-9a14-a8544e21a307",
+              "id": "88357f0c-94bf-5288-9270-4491d8bd4d73",
               "leftValue": "={{ $('Build Resolver Actions').item.json.auto }}",
               "rightValue": "",
               "operator": {
@@ -759,7 +793,7 @@
         },
         "options": {}
       },
-      "id": "d2c4bdf9-d4d0-547b-8ef6-001a07385029",
+      "id": "6a610b19-69a0-5f22-80ef-bacb150255bc",
       "name": "Auto Send?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -779,7 +813,7 @@
           },
           "conditions": [
             {
-              "id": "88357f0c-94bf-5288-9270-4491d8bd4d73",
+              "id": "060a090e-0431-5084-9ae4-1c1c4ab8fad1",
               "leftValue": "={{ $('Build Resolver Actions').item.json.send_via }}",
               "rightValue": "sunshine",
               "operator": {
@@ -792,7 +826,7 @@
         },
         "options": {}
       },
-      "id": "6a610b19-69a0-5f22-80ef-bacb150255bc",
+      "id": "d53594b5-cc9d-55ce-993c-6f945d542794",
       "name": "Via Sunshine?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -812,7 +846,7 @@
           },
           "conditions": [
             {
-              "id": "060a090e-0431-5084-9ae4-1c1c4ab8fad1",
+              "id": "ba237438-7583-52c6-ad01-dfd4e5431fc1",
               "leftValue": "={{ $('Build Resolver Actions').item.json.send_via }}",
               "rightValue": "ticket",
               "operator": {
@@ -825,7 +859,7 @@
         },
         "options": {}
       },
-      "id": "d53594b5-cc9d-55ce-993c-6f945d542794",
+      "id": "b7ffddfe-9238-5316-b2c6-9b2ee0dbc2d0",
       "name": "Reply Needed?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -850,7 +884,7 @@
           ]
         }
       },
-      "id": "ba237438-7583-52c6-ad01-dfd4e5431fc1",
+      "id": "513a7cf3-9cf0-5cc2-b2da-42604d53d12e",
       "name": "Get Chat Audits",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -873,7 +907,7 @@
       "parameters": {
         "jsCode": "// Sunshine conversation id of THIS ticket (deterministic, from its own audits — never from the model)\nconst ev = ($input.first()?.json?.audits || []).flatMap(a => a.events || []).filter(e => e.type === 'ChatStartedEvent');\nconst id = ev.length ? (ev[ev.length - 1].value || {}).conversation_id : null;\nreturn [{ json: id ? { conversation_id: id } : { conversation_id: 'missing', conversation_error: 'no Sunshine conversation found in audits' } }];"
       },
-      "id": "b7ffddfe-9238-5316-b2c6-9b2ee0dbc2d0",
+      "id": "5cfa8834-90be-5327-8a13-d10cd08e3498",
       "name": "Extract Conversation ID",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -893,7 +927,7 @@
         "jsonBody": "={{ JSON.stringify({ author: { type: 'business', displayName: 'Ontop Support' }, content: { type: 'text', text: $('Build Resolver Actions').item.json.reply_text } }) }}",
         "options": {}
       },
-      "id": "513a7cf3-9cf0-5cc2-b2da-42604d53d12e",
+      "id": "dd1bdb9d-db41-5919-aef3-83002d145afd",
       "name": "Send via Sunshine",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -920,7 +954,7 @@
         "jsonBody": "={{ JSON.stringify({ ticket: { comment: { public: true, body: $('Build Resolver Actions').item.json.reply_text } } }) }}",
         "options": {}
       },
-      "id": "5cfa8834-90be-5327-8a13-d10cd08e3498",
+      "id": "f7149d22-6f9b-50a0-978b-d1f25396d06c",
       "name": "Send Public Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -947,7 +981,7 @@
         "jsonBody": "={{ JSON.stringify({ ticket: { status: $('Build Resolver Actions').item.json.status_after } }) }}",
         "options": {}
       },
-      "id": "dd1bdb9d-db41-5919-aef3-83002d145afd",
+      "id": "9cdead37-6ae3-51d3-833c-f69faa5c01b3",
       "name": "Set Status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -975,7 +1009,7 @@
         3900,
         -400
       ],
-      "id": "f7149d22-6f9b-50a0-978b-d1f25396d06c",
+      "id": "be3e717e-a88a-5394-b7a3-b25bd2b46bdc",
       "name": "Mark Sent"
     },
     {
@@ -990,7 +1024,7 @@
         3900,
         -200
       ],
-      "id": "9cdead37-6ae3-51d3-833c-f69faa5c01b3",
+      "id": "69182964-e9ee-5745-b94e-f2e8f1302f33",
       "name": "Mark Send Failed"
     },
     {
@@ -1005,7 +1039,7 @@
         3900,
         -100
       ],
-      "id": "be3e717e-a88a-5394-b7a3-b25bd2b46bdc",
+      "id": "92d8179a-04c1-5ac4-9b64-4475f94044b0",
       "name": "Mark Status Failed"
     },
     {
@@ -1019,7 +1053,7 @@
         "jsonBody": "={{ JSON.stringify({ ticket: { comment: { public: false, body: '⚠️ Nova Resolver: ' + $json.send_result + '. Please ' + ($json.send_result.startsWith('reply sent') ? 'set the status manually (' + $('Build Resolver Actions').item.json.status_after + ').' : 'send the draft above manually.') } } }) }}",
         "options": {}
       },
-      "id": "69182964-e9ee-5745-b94e-f2e8f1302f33",
+      "id": "c41cca71-51a6-5379-b1ce-e3630340079b",
       "name": "Post Send Failure Note",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -1055,7 +1089,7 @@
           ]
         }
       },
-      "id": "92d8179a-04c1-5ac4-9b64-4475f94044b0",
+      "id": "6b15efb9-4d15-5205-a7a5-cfe591cf2c7d",
       "name": "Stamp Tags",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -1074,7 +1108,7 @@
     {
       "parameters": {
         "mode": "raw",
-        "jsonOutput": "={{ JSON.stringify({ timestamp: $now.setZone('America/Bogota').toFormat('yyyy-LL-dd HH:mm'), ticket_id: $('Build Resolver Actions').item.json.ticket_id, owner: $('Build Resolver Actions').item.json.owner, domain: $('Build Resolver Actions').item.json.domain, channel: $('Build Resolver Actions').item.json.channel, answerable: $('Build Resolver Actions').item.json.answerable, confidence: $('Build Resolver Actions').item.json.confidence, language: $('Build Resolver Actions').item.json.reply_language, ask: $('Build Resolver Actions').item.json.ask, sc_team: $('Build Resolver Actions').item.json.sc_team, sc_created: $('Build Resolver Actions').item.json.sc_create, sc_result: $('Compose Note').item.json.sc_result, sc_suggested: $('Build Resolver Actions').item.json.sc_suggested, note_posted: true, kb_used: $('Build Resolver Actions').item.json.kb_titles, mode: $('Build Resolver Actions').item.json.mode, auto: $('Build Resolver Actions').item.json.auto, send_via: $('Build Resolver Actions').item.json.send_via, status_after: $('Build Resolver Actions').item.json.auto ? $('Build Resolver Actions').item.json.status_after : '', send_result: (() => { for (const n of ['Mark Sent', 'Mark Send Failed', 'Mark Status Failed']) { try { const r = $(n).item.json.send_result; if (r) return r; } catch (e) {} } return 'n/a'; })() }) }}",
+        "jsonOutput": "={{ JSON.stringify({ timestamp: $now.setZone('America/Bogota').toFormat('yyyy-LL-dd HH:mm'), ticket_id: $('Build Resolver Actions').item.json.ticket_id, owner: $('Build Resolver Actions').item.json.owner, domain: $('Build Resolver Actions').item.json.domain, channel: $('Build Resolver Actions').item.json.channel, answerable: $('Build Resolver Actions').item.json.answerable, confidence: $('Build Resolver Actions').item.json.confidence, language: $('Build Resolver Actions').item.json.reply_language, ask: $('Build Resolver Actions').item.json.ask, sc_team: $('Build Resolver Actions').item.json.sc_team, sc_created: $('Build Resolver Actions').item.json.sc_create, sc_result: $('Compose Note').item.json.sc_result, sc_suggested: $('Build Resolver Actions').item.json.sc_suggested, note_posted: $('Build Resolver Actions').item.json.post_note, kb_used: $('Build Resolver Actions').item.json.kb_titles, mode: $('Build Resolver Actions').item.json.mode, auto: $('Build Resolver Actions').item.json.auto, send_via: $('Build Resolver Actions').item.json.send_via, status_after: $('Build Resolver Actions').item.json.auto ? $('Build Resolver Actions').item.json.status_after : '', send_result: (() => { for (const n of ['Mark Sent', 'Mark Send Failed', 'Mark Status Failed']) { try { const r = $(n).item.json.send_result; if (r) return r; } catch (e) {} } return 'n/a'; })() }) }}",
         "options": {}
       },
       "type": "n8n-nodes-base.set",
@@ -1083,7 +1117,7 @@
         3000,
         -100
       ],
-      "id": "c41cca71-51a6-5379-b1ce-e3630340079b",
+      "id": "618cff36-df1e-5559-8b4c-45b7656e5279",
       "name": "Build Log Row"
     },
     {
@@ -1109,7 +1143,7 @@
         },
         "options": {}
       },
-      "id": "6b15efb9-4d15-5205-a7a5-cfe591cf2c7d",
+      "id": "b996b475-bdba-56f8-be95-a52a236ba4ba",
       "name": "Log Resolver Result",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
@@ -1139,7 +1173,7 @@
           ]
         }
       },
-      "id": "618cff36-df1e-5559-8b4c-45b7656e5279",
+      "id": "c962e800-96c8-5de6-95e6-921752d7ae77",
       "name": "When Called as KB Tool",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
@@ -1179,7 +1213,7 @@
           }
         }
       },
-      "id": "b996b475-bdba-56f8-be95-a52a236ba4ba",
+      "id": "e96cfe25-50fb-5582-92e4-71fa30106543",
       "name": "Fetch Ada Knowledge",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -1201,7 +1235,7 @@
       "parameters": {
         "jsCode": "// Rank Ada knowledge articles for a free-text query (BM25-lite over name + content). Input: the paginated\n// /knowledge/articles responses (one item per page). Output: ONE item with the top matches, trimmed.\nconst q = String(($('When Called as KB Tool').first().json.query) || '');\nconst lang = String(($('When Called as KB Tool').first().json.language) || '').toLowerCase();\nconst norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');\nconst STOP = new Set('a al algo como con de del el en es esta este la las lo los mi mis no o para por que se si su sus tu tus un una y yo me le the to of and or in on for is are my your how what why when can do does i it with from be have has not at this that an as by'.split(' '));\nconst toks = s => norm(s).split(/[^a-z0-9]+/).filter(w => w.length > 2 && !STOP.has(w));\nconst stem = w => w.length > 5 ? w.slice(0, 5) : w; // cheap stemming: transferencia/transferencias/transfer → trans... \nconst qt = [...new Set(toks(q).map(stem))];\nconst arts = $input.all().flatMap(i => i.json.data || []).filter(a => a.enabled !== false);\nconst docs = arts.map(a => {\n  const nt = toks(a.name).map(stem), ct = toks(a.content).map(stem);\n  const tf = {}; for (const w of ct) tf[w] = (tf[w] || 0) + 1;\n  return { a, nt: new Set(nt), tf, len: ct.length || 1 };\n});\nconst N = docs.length, avg = docs.reduce((s, d) => s + d.len, 0) / (N || 1);\nconst df = {}; for (const w of qt) df[w] = docs.filter(d => d.tf[w] || d.nt.has(w)).length;\nconst scored = docs.map(d => {\n  let s = 0;\n  for (const w of qt) {\n    const idf = Math.log(1 + (N - df[w] + 0.5) / (df[w] + 0.5));\n    const f = d.tf[w] || 0;\n    s += idf * (f * 2.2) / (f + 1.2 * (0.25 + 0.75 * d.len / avg));\n    if (d.nt.has(w)) s += idf * 1.5; // title match bonus\n  }\n  const loc = norm(d.a.locale || d.a.language || '');\n  if (lang && loc && !loc.startsWith(lang)) s *= 0.6; // prefer the customer's language\n  return { s, d };\n}).filter(x => x.s > 0).sort((x, y) => y.s - x.s).slice(0, 5);\nreturn [{ json: { query: q, total_articles: N, results: scored.map(({ s, d }) => ({\n  score: Math.round(s * 10) / 10, id: d.a.id, title: d.a.name, url: d.a.url || '', locale: d.a.locale || d.a.language || '',\n  content: String(d.a.content || '').slice(0, 1800),\n})) } }];\n"
       },
-      "id": "c962e800-96c8-5de6-95e6-921752d7ae77",
+      "id": "58c3c869-d41e-53ce-9238-6b2551fccd11",
       "name": "Rank Articles",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1212,7 +1246,7 @@
     },
     {
       "parameters": {},
-      "id": "e96cfe25-50fb-5582-92e4-71fa30106543",
+      "id": "34c3c96c-f590-5331-ba2e-8e6ed89607d4",
       "name": "On Workflow Error",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
@@ -1232,7 +1266,7 @@
         "text": "=⚠️ Nova Resolver workflow failed: {{ $json.execution.error.message }}\nNode: {{ $json.execution.lastNodeExecuted }} · {{ $json.execution.url }}",
         "otherOptions": {}
       },
-      "id": "58c3c869-d41e-53ce-9238-6b2551fccd11",
+      "id": "265e36e3-e88a-5552-acbf-4dbd1dddba05",
       "name": "Send Error Alert to Slack",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.3,
@@ -1240,7 +1274,7 @@
         220,
         800
       ],
-      "webhookId": "34c3c96c-f590-5331-ba2e-8e6ed89607d4",
+      "webhookId": "52fb9d27-d07d-532d-bf62-bd22921b8817",
       "credentials": {
         "slackApi": {
           "id": "WZT6W2KExNG7rKOc",
@@ -1564,7 +1598,25 @@
       "main": [
         [
           {
+            "node": "Post Note?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Note?": {
+      "main": [
+        [
+          {
             "node": "Post Internal Note",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stamp Tags",
             "type": "main",
             "index": 0
           }
