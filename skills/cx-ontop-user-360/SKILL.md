@@ -1,9 +1,9 @@
 ---
-name: "ontop-worker-360"
-description: "Worker/client 'hoja de vida' for Ontop CX agents and for the teams that own tickets in the direct-assignment pilot (Tech Support, Payouts, FinOps, Product Ops, Compliance, Card Ops): given a CR, CA, CL, email, phone or transaction ID, pull a 360° profile from Onsight (account, contract, transactions, logins, duplicates, fraud signals) and draft the reply to the customer in Ontop's tone. Needs the Onsight connector; without it, use ontop-ticket-reply."
+name: "cx-ontop-user-360"
+description: "Worker/client 'hoja de vida' for Ontop CX agents and for the teams that own tickets in the direct-assignment pilot (Tech Support, Payouts, FinOps, Product Ops, Compliance, Card Ops): given a CR, CA, CL, email, phone or transaction ID, pull a 360° profile from Onsight (account, contract, transactions, logins, duplicates, fraud signals) and draft the reply to the customer in Ontop's tone. Needs the Onsight connector."
 ---
 
-# Ontop Worker 360 — hoja de vida para agentes de CX
+# CX Ontop User 360 — hoja de vida del usuario
 
 Objetivo: cuando a un agente le llega un ticket, con **un solo dato** (CR, email, teléfono, CA, CL o ID de transacción) le devuelves en una sola respuesta quién es la persona, **qué está pidiendo**, qué le ha pasado y qué debe hacer.
 
@@ -245,16 +245,12 @@ Donde dice "escala a X": si quien usa la skill **es** X, ese paso es suyo (resol
 
 ## Respuesta al cliente (tono y reglas de Ontop)
 
-La respuesta sugerida sigue las mismas reglas que la skill `ontop-ticket-reply`. Si cambian, se cambian en las dos.
-
 **Voz:** idioma del cliente (español con "tú", inglés o portugués). Cálida, directa y corta. Primero la respuesta, después el contexto. Si esperó o lo rebotaron entre áreas, una disculpa en una frase, sin excusas. Una sola pregunta por mensaje (o una lista corta numerada). Firma: "Equipo de Soporte de Ontop" / "Ontop Support Team" / "Equipe de Suporte Ontop" (opcional en WhatsApp/chat).
 
-**Estructura:** saludo con el nombre → la respuesta o el estado con el dato verificado (fecha, monto, estado) → qué tiene que hacer el cliente, en pasos con los nombres exactos de los botones → qué sigue (sin fechas) → firma. Email 60–150 palabras; WhatsApp/chat 25–80.
+**Estructura:** saludo con el nombre → la respuesta o el estado con el dato verificado (fecha, monto, estado) → qué tiene que hacer el cliente, en pasos con los nombres exactos de los botones → qué sigue → firma. Email 60–150 palabras; WhatsApp/chat 25–80.
 
 **Nunca en el texto al cliente:**
-- Nombres de proveedores, bancos o partners (aunque aparezcan en esta skill o en los datos): "nuestro aliado de pagos", "la red de la tarjeta", "nuestro aliado de verificación".
-- ETAs o fechas que no podemos garantizar. Único plazo permitido: revisión de Paycheck Advance "hasta 48 horas hábiles".
-- Estados o herramientas internas (APPROVED_RISK, status 5, side conversation, ADMV, Onsight, Nova, Hoop, Sumsub) → palabras simples ("en revisión", "retenido por una validación de seguridad").
+- Estados o herramientas internas (APPROVED_RISK, status 5, side conversation, ADMV, Onsight, Nova, Hoop) → palabras simples ("en revisión", "retenido por una validación de seguridad").
 - Números completos de cuenta, tarjeta, documento o wallet (máximo los últimos 4).
 - Listas de países restringidos, sanciones u OFAC → "Este producto no está disponible para tu país de residencia."
 - Future Fund como "seguro", "ahorro" o "interés", ni cálculos de rendimiento → "recompensas", "la tasa y los términos aparecen en la app".
